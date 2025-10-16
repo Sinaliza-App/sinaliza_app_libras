@@ -112,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               activeColor: Colors.cyanAccent,
                             ),
                             const Text(
-                              "Lembrar",
+                              "Lembrar de mim",
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.white70,
