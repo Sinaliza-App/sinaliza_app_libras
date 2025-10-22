@@ -19,15 +19,16 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'sinaliza.db');
     return await openDatabase(path, version: 1, onCreate: _onCreate);
   }
-
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL
-      )
-    ''');
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL
+      )'''
+    );
+    
     await db.execute('''
       CREATE TABLE lessons (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,4 +134,5 @@ class DatabaseHelper {
     final db = await database;
     return await db.delete('progress', where: 'id = ?', whereArgs: [id]);
   }
+  
 }
