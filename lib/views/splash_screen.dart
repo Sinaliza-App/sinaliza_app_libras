@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
+import 'package:http/http.dart' as http; // 1. Importe o http
+import 'dart:convert'; // 2. Importe o dart:convert
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,25 +23,64 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAuthStatus() async {
-    // Adiciona um pequeno delay para a splash screen (opcional, mas bom para UI)
+    // Adiciona um pequeno delay (opcional, mas bom para UI)
     await Future.delayed(const Duration(seconds: 1));
 
-    // Tenta ler o token do storage
+    // 1. Tenta ler o token do storage
     final String? token = await _storage.read(key: 'jwt_token');
 
-    if (!mounted) return;
-
-    // TODO: Adicionar lógica para validar o token com a API
-    // (Por enquanto, só checamos se ele existe)
-
-    if (token != null) {
-      // Se o token existe, vá para a tela principal (Login automático)
+    if (token == null) {
+      // Se não existe token, vá para a tela de Login
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LessonListScreen()),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
-    } else {
-      // Se não existe token, vá para a tela de Login
+      return;
+    }
+
+    // 2. Se o token EXISTE, vamos VALIDÁ-LO com a API
+    // ATENÇÃO: Use '10.0.2.2' se estiver no Emulador Android
+    const String apiUrl = 'http://10.0.2.2:3000/users/me';
+    // Se estiver no app Desktop (Windows), pode usar 'localhost':
+    // const String apiUrl = 'http://localhost:3000/users/me';
+
+    try {
+      final response = await http.get(
+        Uri.parse(apiUrl),
+        headers: {
+          // 3. Enviamos o "crachá" (token) no cabeçalho
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        // --- SUCESSO (200) ---
+        // O token é válido. O backend nos enviou os dados do usuário.
+        // TODO: Salvar os dados do usuário (json.decode(response.body)) em um
+        // gerenciador de estado (Provider, Riverpod, etc.)
+        
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LessonListScreen()),
+        );
+      } else {
+        // --- FALHA (401, 400) ---
+        // O token é inválido ou expirou.
+        // Apagamos o token "podre" do celular.
+        await _storage.delete(key: 'jwt_token');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } catch (e) {
+      // 4. Erro de rede (sem internet, API desligada)
+      // Não podemos validar, então mandamos para o Login por segurança.
+      if (!mounted) return;
+      await _storage.delete(key: 'jwt_token'); // Limpa o token por via das dúvidas
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
