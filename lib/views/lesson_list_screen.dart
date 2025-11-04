@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_detail_screen.dart'; // Para a navegação
 import 'package:sinaliza_app_libras/views/login_screen.dart'; // Para fazer logout em caso de erro
+import 'package:sinaliza_app_libras/views/profile_page.dart';
 
 class LessonListScreen extends StatefulWidget {
   const LessonListScreen({super.key});
@@ -89,6 +90,16 @@ class _LessonListScreenState extends State<LessonListScreen> {
         title: const Text('Lições de Libras'),
         // TODO: Adicionar um botão de "Perfil" ou "Sair" aqui
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilePage()),
+              );
+            },
+            tooltip: 'Meu Perfil',
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,

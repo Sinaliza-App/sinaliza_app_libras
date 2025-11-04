@@ -4,6 +4,8 @@ import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:http/http.dart' as http; // 1. Importe o http
 import 'dart:convert'; // 2. Importe o dart:convert
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -56,15 +58,18 @@ class _SplashScreenState extends State<SplashScreen> {
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        // --- SUCESSO (200) ---
-        // O token é válido. O backend nos enviou os dados do usuário.
-        // TODO: Salvar os dados do usuário (json.decode(response.body)) em um
-        // gerenciador de estado (Provider, Riverpod, etc.)
+        if (response.statusCode == 200) {
+        // --- SUCESSO! MODIFICAÇÃO AQUI ---
         
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LessonListScreen()),
+        // 2. Decodifica os dados do usuário
+          final userData = json.decode(response.body);
+
+        // 3. Salva o usuário no Provider (Gerenciador de Estado Global)
+          Provider.of<UserProvider>(context, listen: false).setUser(userData);
+        
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LessonListScreen()),
         );
       } else {
         // --- FALHA (401, 400) ---

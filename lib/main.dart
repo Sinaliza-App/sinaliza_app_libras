@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'dart:io'; // Importa para verificar a plataforma (Windows, etc.)
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // Importa o FFI do SQFlite
 import 'package:sinaliza_app_libras/views/splash_screen.dart'; // 1. Importa a nova SplashScreen
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
 Future<void> main() async {
   // Garante que os bindings do Flutter estejam prontos
-  WidgetsFlutterBinding.ensureInitialized(); 
+  WidgetsFlutterBinding.ensureInitialized();
 
   // Bloco de código que resolve o erro do banco de dados em Desktop
   // (como o erro 'databaseFactory not initialized')
@@ -13,8 +15,13 @@ Future<void> main() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-  
-  runApp(const MyApp());
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => UserProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
