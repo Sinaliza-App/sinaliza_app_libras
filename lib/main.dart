@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const SinalizaApp());
+  runApp(const MyApp());
 }
 
 class SinalizaApp extends StatelessWidget {
@@ -10,342 +10,112 @@ class SinalizaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Sinaliza',
-      theme: ThemeData.dark().copyWith(
-        colorScheme: const ColorScheme.dark(
-          primary: Colors.cyanAccent,
-          secondary: Colors.cyan,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
+      title: 'Flutter Demo',
+      theme: ThemeData(
+        // This is the theme of your application.
+        //
+        // TRY THIS: Try running your application with "flutter run". You'll see
+        // the application has a purple toolbar. Then, without quitting the app,
+        // try changing the seedColor in the colorScheme below to Colors.green
+        // and then invoke "hot reload" (save your changes or press the "hot
+        // reload" button in a Flutter-supported IDE, or press "r" if you used
+        // the command line to start the app).
+        //
+        // Notice that the counter didn't reset back to zero; the application
+        // state is not lost during the reload. To reset the state, use hot
+        // restart instead.
+        //
+        // This works for code too, not just values: Most code changes can be
+        // tested with just a hot reload.
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const LoginScreen(),
+      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+
+  // This widget is the home page of your application. It is stateful, meaning
+  // that it has a State object (defined below) that contains fields that affect
+  // how it looks.
+
+  // This class is the configuration for the state. It holds the values (in this
+  // case the title) provided by the parent (in this case the App widget) and
+  // used by the build method of the State. Fields in a Widget subclass are
+  // always marked "final".
+
+  final String title;
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+class _MyHomePageState extends State<MyHomePage> {
+  int _counter = 0;
 
-  void _login() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Login realizado com sucesso!')),
-    );
-  }
-
-  void _goToForgotPassword() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
-    );
+  void _incrementCounter() {
+    setState(() {
+      // This call to setState tells the Flutter framework that something has
+      // changed in this State, which causes it to rerun the build method below
+      // so that the display can reflect the updated values. If we changed
+      // _counter without calling setState(), then the build method would not be
+      // called again, and so nothing would appear to happen.
+      _counter++;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    // This method is rerun every time setState is called, for instance as done
+    // by the _incrementCounter method above.
+    //
+    // The Flutter framework has been optimized to make rerunning build methods
+    // fast, so that you can just rebuild anything that needs updating rather
+    // than having to individually change instances of widgets.
     return Scaffold(
+      appBar: AppBar(
+        // TRY THIS: Try changing the color here to a specific color (to
+        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
+        // change color while the other colors stay the same.
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        // Here we take the value from the MyHomePage object that was created by
+        // the App.build method, and use it to set our appbar title.
+        title: Text(widget.title),
+      ),
       body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 350, maxHeight: 460),
-            child: Card(
-              color: Colors.white.withOpacity(0.05),
-              elevation: 10,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(28.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // ---------- LOGO E TÍTULO ----------
-                    Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 36,
-                          backgroundColor: Colors.transparent,
-                          backgroundImage: const AssetImage(
-                            'assets/f4e774e4-8930-4073-97c3-d264d701e292.png',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Sinaliza',
-                          style: TextStyle(
-                            color: Colors.cyanAccent,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    _buildInputField(
-                      controller: _emailController,
-                      label: "E-mail",
-                      icon: Icons.email_outlined,
-                    ),
-                    const SizedBox(height: 14),
-                    _buildInputField(
-                      controller: _passwordController,
-                      label: "Senha",
-                      icon: Icons.lock_outline,
-                      obscure: true,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: true,
-                              onChanged: (_) {},
-                              activeColor: Colors.cyanAccent,
-                            ),
-                            const Text(
-                              "Lembrar de mim",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                        TextButton(
-                          onPressed: _goToForgotPassword,
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 25),
-                          ),
-                          child: const Text(
-                            "Esqueci a senha",
-                            style: TextStyle(
-                              color: Colors.cyanAccent,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _AnimatedButton(text: "LOGIN", onTap: _login),
-                  ],
-                ),
-              ),
+        // Center is a layout widget. It takes a single child and positions it
+        // in the middle of the parent.
+        child: Column(
+          // Column is also a layout widget. It takes a list of children and
+          // arranges them vertically. By default, it sizes itself to fit its
+          // children horizontally, and tries to be as tall as its parent.
+          //
+          // Column has various properties to control how it sizes itself and
+          // how it positions its children. Here we use mainAxisAlignment to
+          // center the children vertically; the main axis here is the vertical
+          // axis because Columns are vertical (the cross axis would be
+          // horizontal).
+          //
+          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
+          // action in the IDE, or press "p" in the console), to see the
+          // wireframe for each widget.
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const Text('You have pushed the button this many times:'),
+            Text(
+              '$_counter',
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
-          ),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool obscure = false,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.cyanAccent, fontSize: 14),
-        prefixIcon: Icon(icon, color: Colors.cyanAccent, size: 20),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 10,
-          horizontal: 10,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.cyanAccent),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.cyanAccent, width: 1.5),
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatedButton extends StatefulWidget {
-  final String text;
-  final VoidCallback onTap;
-  const _AnimatedButton({required this.text, required this.onTap});
-
-  @override
-  State<_AnimatedButton> createState() => _AnimatedButtonState();
-}
-
-class _AnimatedButtonState extends State<_AnimatedButton> {
-  bool _hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        width: 160,
-        height: 45,
-        decoration: BoxDecoration(
-          color: _hovering ? Colors.cyan.shade300 : Colors.cyanAccent,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: _hovering
-              ? [
-                  BoxShadow(
-                    color: Colors.cyanAccent.withOpacity(0.5),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                ]
-              : [],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: widget.onTap,
-            child: Center(
-              child: Text(
-                widget.text,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------- TELA DE ESQUECI MINHA SENHA ----------
-class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
-
-  @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
-}
-
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final TextEditingController _emailController = TextEditingController();
-
-  void _sendResetLink() {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Digite seu e-mail.')));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Link de recuperação enviado para $email')),
-      );
-      Navigator.pop(context);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 350, maxHeight: 380),
-            child: Card(
-              color: Colors.white.withOpacity(0.05),
-              elevation: 10,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(28.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircleAvatar(
-                      radius: 34,
-                      backgroundColor: Colors.cyanAccent,
-                      child: Icon(
-                        Icons.lock_reset,
-                        size: 40,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildInputField(
-                      controller: _emailController,
-                      label: "Digite seu e-mail",
-                      icon: Icons.email_outlined,
-                    ),
-                    const SizedBox(height: 18),
-                    _AnimatedButton(text: "ENVIAR", onTap: _sendResetLink),
-                    const SizedBox(height: 10),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 25),
-                      ),
-                      child: const Text(
-                        "Voltar ao login",
-                        style: TextStyle(
-                          color: Colors.cyanAccent,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-  }) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.cyanAccent, fontSize: 14),
-        prefixIcon: Icon(icon, color: Colors.cyanAccent, size: 20),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 10,
-          horizontal: 10,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.cyanAccent),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.cyanAccent, width: 1.5),
-        ),
-      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _incrementCounter,
+        tooltip: 'Increment',
+        child: const Icon(Icons.add),
+      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
