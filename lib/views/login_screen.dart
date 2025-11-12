@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart'; // Para onde iremos após o login
 import 'package:sinaliza_app_libras/views/profile_screen.dart'; // Para o usuário poder se cadastrar
 import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 1. IMPORTADO
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -58,10 +60,11 @@ class _LoginScreenState extends State<LoginScreen> {
         
         // 3. Pegue o token da resposta
         final String token = responseData['token'];
-        
+        final Map<String, dynamic> userData = responseData['user'];
         // 4. Salve o token com segurança no dispositivo
         await _storage.write(key: 'jwt_token', value: token);
-
+        Provider.of<UserProvider>(context, listen: false).setUser(userData);
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(responseData['message'] ?? 'Login bem-sucedido!')),
         );
