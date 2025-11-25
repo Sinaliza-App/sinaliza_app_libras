@@ -29,8 +29,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   // Estado do Jogo
   String _detectedGesture = "Posicione a mão...";
   double _detectedConfidence = 0.0;
-  bool _isCorrect = false; // <--- NOVA VARIÁVEL: O usuário acertou?
-  String _targetGesture = ""; // <--- A resposta correta esperada
+  bool _isCorrect = false; // O usuário já venceu?
+  String _targetGesture = ""; // A resposta correta esperada
+
+  // Variáveis do Temporizador (Gamificação)
+  DateTime? _firstDetectionTime; // Quando o usuário começou a acertar
+  final int _secondsToHold = 3;  // Tempo necessário para segurar o gesto
+  int _secondsHeld = 0;          // Contador para exibir na tela
 
   // Progresso
   bool _isSavingProgress = false;
@@ -39,11 +44,11 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _extractTargetGesture(); // 1. Descobre qual é o gesto correto
+    _extractTargetGesture(); // Descobre qual é o gesto correto
     _initializeCamera();
   }
 
-  // 1. Lógica para extrair a resposta correta do Título da Lição
+  // Lógica para extrair a resposta correta do Título da Lição
   void _extractTargetGesture() {
     final title = widget.lesson['title'].toString();
     
@@ -52,7 +57,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       _targetGesture = title.split("Letra ").last.trim();
     } else {
       // Se for "Saudações: Oi", a meta é "Oi"
-      // (Ajuste essa lógica conforme seus títulos no banco)
       _targetGesture = title.split(":").last.trim();
     }
     print("Meta da Lição: $_targetGesture");
@@ -96,7 +100,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   void _connectToWebSocket() {
     try {
-      // ATENÇÃO: Use o IP correto (Radmin ou 10.0.2.2)
+      // ATENÇÃO: Use '10.0.2.2' (Emulador Android) ou o IP do Radmin VPN
       final wsUrl = Uri.parse('ws://10.0.2.2:8080');
       _channel = WebSocketChannel.connect(wsUrl);
 
@@ -121,20 +125,38 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         final String gesture = data['gesto'];
         final double confidence = data['confianca'];
 
-        // 2. LÓGICA DE COMPARAÇÃO (O Coração do Jogo)
-        bool hit = false;
+        // --- LÓGICA DE TEMPORIZADOR E VALIDAÇÃO ---
+        bool isCurrentlyMatching = false;
         
-        // Só valida se tiver confiança razoável (ex: > 60%)
-        if (confidence > 0.7 && gesture == _targetGesture) {
-          hit = true;
+        // Verifica se o gesto atual bate com a meta e tem confiança > 60%
+        if (confidence > 0.6 && gesture == _targetGesture) {
+          isCurrentlyMatching = true;
         }
+
+        if (isCurrentlyMatching) {
+          // Se começou a acertar agora, marca o tempo inicial
+          _firstDetectionTime ??= DateTime.now();
+          
+          // Calcula quanto tempo passou
+          final duration = DateTime.now().difference(_firstDetectionTime!);
+          _secondsHeld = duration.inSeconds;
+
+          // Se segurou pelo tempo necessário...
+          if (_secondsHeld >= _secondsToHold) {
+            _isCorrect = true; // VENCEU!
+          }
+        } else {
+          // Se parou de acertar (ou errou), zera o cronômetro
+          if (!_isCorrect) { // Só zera se ainda não tiver vencido
+             _firstDetectionTime = null;
+             _secondsHeld = 0;
+          }
+        }
+        // -----------------------------
 
         setState(() {
           _detectedGesture = gesture;
           _detectedConfidence = confidence;
-          
-          // Se acertou uma vez, mantém acertado (para não piscar)
-          if (hit) _isCorrect = true; 
         });
         
         _isStreaming = false;
@@ -151,16 +173,28 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   Future<void> _saveProgress() async {
-    setState(() {
-      _isSavingProgress = true;
-    });
+    // Só permite salvar se o usuário tiver acertado
+    if (!_lessonCorrect) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Você precisa acertar o gesto primeiro!')),
+      );
+      return;
+    }
+
+    setState(() { _isSavingProgress = true; });
     final token = await _storage.read(key: 'jwt_token');
     
-    // ... (código de chamada da API POST /progress - IDÊNTICO AO ANTERIOR)
-    if (token == null) { /*...*/ return; }
+    if (token == null) { 
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro de autenticação')));
+      setState(() { _isSavingProgress = false; });
+      return; 
+    }
     
     const String apiUrl = 'http://10.0.2.2:3000/progress';
     final int lessonId = widget.lesson['id'];
+    
+    // Definindo a pontuação (XP) fixa por enquanto
+    const int scoreEarned = 10; 
 
     try {
       final response = await http.post(
@@ -169,28 +203,44 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           'Content-Type': 'application/json; charset=UTF-8',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({'lesson_id': lessonId}),
+        body: json.encode({
+          'lesson_id': lessonId,
+          'score': scoreEarned, // Enviando a pontuação
+        }),
       ).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
       
-      if (response.statusCode == 201 || response.statusCode == 409) {
+      final responseData = json.decode(response.body);
+
+      if (response.statusCode == 201) {
+        // SUCESSO
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Parabéns! Lição Concluída! 🎉'),
+          SnackBar(
+            content: Text(responseData['message'] ?? 'Progresso salvo! +$scoreEarned XP'),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
           ),
         );
         Navigator.pop(context); 
+      } else if (response.statusCode == 409) {
+        // JÁ SALVO
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Você já completou esta lição.')),
+        );
+        Navigator.pop(context);
       } else {
-        // ... erro
+         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao salvar.')));
       }
     } catch (e) {
-      // ... erro
+       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro de conexão: $e')));
     } finally {
       setState(() { _isSavingProgress = false; });
     }
   }
+  
+  // Getter auxiliar para facilitar leitura no build
+  bool get _lessonCorrect => _isCorrect;
 
   @override
   Widget build(BuildContext context) {
@@ -209,7 +259,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               textAlign: TextAlign.center,
             ),
             Text(
-              _targetGesture, // Mostra apenas a meta (ex: "A")
+              _targetGesture, 
               style: Theme.of(context).textTheme.displayLarge?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.blue[800],
@@ -224,10 +274,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(16),
-                  // Borda verde se acertou, cinza se não
+                  // Borda muda de cor baseado no estado do jogo
                   border: Border.all(
-                    color: _isCorrect ? Colors.green : Colors.grey,
-                    width: _isCorrect ? 4 : 1,
+                    color: _isCorrect ? Colors.green : (_firstDetectionTime != null ? Colors.yellow : Colors.grey),
+                    width: _isCorrect ? 4 : (_firstDetectionTime != null ? 3 : 1),
                   ),
                 ),
                 child: ClipRRect(
@@ -245,36 +295,41 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             ),
             const SizedBox(height: 20),
             
-            // --- FEEDBACK VISUAL ---
+            // --- FEEDBACK VISUAL DO JOGO ---
             Center(
               child: Column(
                 children: [
-                  Text(
-                    _isCorrect ? "CORRETO! 🎉" : "Tentando detectar...",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: _isCorrect ? Colors.green : Colors.grey,
-                    ),
-                  ),
-                  if (!_isCorrect && _detectedGesture != "Nenhum")
+                  if (_isCorrect)
+                    const Text("PARABÉNS! 🎉", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green))
+                  
+                  else if (_firstDetectionTime != null)
+                     // Contagem regressiva
                     Text(
-                      "Detectado: $_detectedGesture (${(_detectedConfidence*100).toInt()}%)",
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                      "Segure... ${_secondsHeld + 1}/$_secondsToHold",
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
+                    )
+                  
+                  else if (_detectedGesture != "Nenhum")
+                    Text(
+                      "Detectado: $_detectedGesture",
+                      style: const TextStyle(color: Colors.red, fontSize: 18),
+                    )
+                  
+                  else
+                    const Text("Posicione a mão...", style: TextStyle(fontSize: 18, color: Colors.grey)),
                 ],
               ),
             ),
             
             const SizedBox(height: 20),
             
-            // --- BOTÃO DE CONCLUIR (BLOQUEADO ATÉ ACERTAR) ---
+            // --- BOTÃO DE CONCLUIR (BLOQUEADO ATÉ VENCER) ---
             _isSavingProgress
                 ? const Center(child: CircularProgressIndicator())
                 : ElevatedButton.icon(
                     icon: Icon(_isCorrect ? Icons.check_circle : Icons.lock),
-                    label: Text(_isCorrect ? 'Concluir Lição' : 'Faça o sinal correto'),
-                    // O botão fica null (desabilitado) se _isCorrect for falso
+                    label: Text(_isCorrect ? 'Concluir Lição (+10 XP)' : 'Acerte o sinal para liberar'),
+                    // O botão só ativa se _isCorrect for true
                     onPressed: _isCorrect ? _saveProgress : null, 
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
