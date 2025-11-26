@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:confetti/confetti.dart'; 
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic> lesson;
@@ -29,37 +30,35 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   // Estado do Jogo
   String _detectedGesture = "Posicione a mão...";
   double _detectedConfidence = 0.0;
-  bool _isCorrect = false; // O usuário já venceu?
-  String _targetGesture = ""; // A resposta correta esperada
+  bool _isCorrect = false; 
+  String _targetGesture = ""; 
 
-  // Variáveis do Temporizador (Gamificação)
-  DateTime? _firstDetectionTime; // Quando o usuário começou a acertar
-  final int _secondsToHold = 3;  // Tempo necessário para segurar o gesto
-  int _secondsHeld = 0;          // Contador para exibir na tela
+  // Variáveis do Temporizador
+  DateTime? _firstDetectionTime; 
+  final int _secondsToHold = 3;  
+  int _secondsHeld = 0;          
 
-  // Progresso
+  // Progresso e Efeitos
   bool _isSavingProgress = false;
   final _storage = const FlutterSecureStorage();
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
-    _extractTargetGesture(); // Descobre qual é o gesto correto
+    _extractTargetGesture(); 
     _initializeCamera();
+    // Confetes duram 2 segundos ao explodir
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
   }
 
-  // Lógica para extrair a resposta correta do Título da Lição
   void _extractTargetGesture() {
     final title = widget.lesson['title'].toString();
-    
-    // Exemplo: Se o título for "Alfabeto: Letra A", a meta é "A"
     if (title.contains("Letra ")) {
       _targetGesture = title.split("Letra ").last.trim();
     } else {
-      // Se for "Saudações: Oi", a meta é "Oi"
       _targetGesture = title.split(":").last.trim();
     }
-    print("Meta da Lição: $_targetGesture");
   }
 
   @override
@@ -68,6 +67,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _channel?.sink.close();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
@@ -100,7 +100,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   void _connectToWebSocket() {
     try {
-      // ATENÇÃO: Use '10.0.2.2' (Emulador Android) ou o IP do Radmin VPN
+      // ATENÇÃO: Use o IP correto (10.0.2.2 ou Radmin)
       final wsUrl = Uri.parse('ws://10.0.2.2:8080');
       _channel = WebSocketChannel.connect(wsUrl);
 
@@ -125,34 +125,28 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         final String gesture = data['gesto'];
         final double confidence = data['confianca'];
 
-        // --- LÓGICA DE TEMPORIZADOR E VALIDAÇÃO ---
         bool isCurrentlyMatching = false;
-        
-        // Verifica se o gesto atual bate com a meta e tem confiança > 60%
+        // Validação: Gesto correto E confiança > 60%
         if (confidence > 0.6 && gesture == _targetGesture) {
           isCurrentlyMatching = true;
         }
 
         if (isCurrentlyMatching) {
-          // Se começou a acertar agora, marca o tempo inicial
           _firstDetectionTime ??= DateTime.now();
-          
-          // Calcula quanto tempo passou
           final duration = DateTime.now().difference(_firstDetectionTime!);
           _secondsHeld = duration.inSeconds;
 
-          // Se segurou pelo tempo necessário...
-          if (_secondsHeld >= _secondsToHold) {
-            _isCorrect = true; // VENCEU!
+          if (_secondsHeld >= _secondsToHold && !_isCorrect) {
+            // VENCEU!
+            _isCorrect = true; 
+            _confettiController.play(); // Dispara a festa
           }
         } else {
-          // Se parou de acertar (ou errou), zera o cronômetro
-          if (!_isCorrect) { // Só zera se ainda não tiver vencido
+          if (!_isCorrect) { 
              _firstDetectionTime = null;
              _secondsHeld = 0;
           }
         }
-        // -----------------------------
 
         setState(() {
           _detectedGesture = gesture;
@@ -173,27 +167,18 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   Future<void> _saveProgress() async {
-    // Só permite salvar se o usuário tiver acertado
-    if (!_lessonCorrect) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Você precisa acertar o gesto primeiro!')),
-      );
-      return;
-    }
+    if (!_isCorrect) return;
 
     setState(() { _isSavingProgress = true; });
     final token = await _storage.read(key: 'jwt_token');
     
     if (token == null) { 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro de autenticação')));
       setState(() { _isSavingProgress = false; });
       return; 
     }
     
     const String apiUrl = 'http://10.0.2.2:3000/progress';
     final int lessonId = widget.lesson['id'];
-    
-    // Definindo a pontuação (XP) fixa por enquanto
     const int scoreEarned = 10; 
 
     try {
@@ -205,7 +190,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         },
         body: json.encode({
           'lesson_id': lessonId,
-          'score': scoreEarned, // Enviando a pontuação
+          'score': scoreEarned,
         }),
       ).timeout(const Duration(seconds: 10));
 
@@ -214,33 +199,31 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       final responseData = json.decode(response.body);
 
       if (response.statusCode == 201) {
-        // SUCESSO
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(responseData['message'] ?? 'Progresso salvo! +$scoreEarned XP'),
+            content: Text(responseData['message'] ?? 'Progresso salvo!'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
           ),
         );
         Navigator.pop(context); 
       } else if (response.statusCode == 409) {
-        // JÁ SALVO
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Você já completou esta lição.')),
-        );
         Navigator.pop(context);
       } else {
          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao salvar.')));
       }
     } catch (e) {
-       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro de conexão: $e')));
+       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
     } finally {
       setState(() { _isSavingProgress = false; });
     }
   }
-  
-  // Getter auxiliar para facilitar leitura no build
-  bool get _lessonCorrect => _isCorrect;
+
+  // Função auxiliar para cor da barra
+  Color _getConfidenceColor(double confidence) {
+    if (confidence < 0.4) return Colors.red;
+    if (confidence < 0.7) return Colors.orange;
+    return Colors.green;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -248,100 +231,140 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(lessonTitle)),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Faça o sinal para:',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            Text(
-              _targetGesture, 
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue[800],
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
+      // Stack permite colocar os confetes POR CIMA de tudo
+      body: Stack(
+        children: [
+          // 1. CONTEÚDO PRINCIPAL (EMBAIXO)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Meta
+                Column(
+                  children: [
+                    Text('Faça o sinal para:', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      _targetGesture, 
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[800],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
 
-            // --- ÁREA DA CÂMERA ---
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(16),
-                  // Borda muda de cor baseado no estado do jogo
-                  border: Border.all(
-                    color: _isCorrect ? Colors.green : (_firstDetectionTime != null ? Colors.yellow : Colors.grey),
-                    width: _isCorrect ? 4 : (_firstDetectionTime != null ? 3 : 1),
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12.0),
-                  child: _isCameraInitialized
-                      ? Center(
-                          child: AspectRatio(
-                            aspectRatio: _cameraController!.value.aspectRatio,
-                            child: CameraPreview(_cameraController!),
-                          ),
-                        )
-                      : const Center(child: CircularProgressIndicator(color: Colors.white)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            
-            // --- FEEDBACK VISUAL DO JOGO ---
-            Center(
-              child: Column(
-                children: [
-                  if (_isCorrect)
-                    const Text("PARABÉNS! 🎉", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green))
-                  
-                  else if (_firstDetectionTime != null)
-                     // Contagem regressiva
-                    Text(
-                      "Segure... ${_secondsHeld + 1}/$_secondsToHold",
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
-                    )
-                  
-                  else if (_detectedGesture != "Nenhum")
-                    Text(
-                      "Detectado: $_detectedGesture",
-                      style: const TextStyle(color: Colors.red, fontSize: 18),
-                    )
-                  
-                  else
-                    const Text("Posicione a mão...", style: TextStyle(fontSize: 18, color: Colors.grey)),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 20),
-            
-            // --- BOTÃO DE CONCLUIR (BLOQUEADO ATÉ VENCER) ---
-            _isSavingProgress
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton.icon(
-                    icon: Icon(_isCorrect ? Icons.check_circle : Icons.lock),
-                    label: Text(_isCorrect ? 'Concluir Lição (+10 XP)' : 'Acerte o sinal para liberar'),
-                    // O botão só ativa se _isCorrect for true
-                    onPressed: _isCorrect ? _saveProgress : null, 
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.grey[300],
-                      disabledForegroundColor: Colors.grey[600],
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      textStyle: const TextStyle(fontSize: 18),
+                // ÁREA DA CÂMERA
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        // Borda muda de cor: Cinza -> Amarelo (contando) -> Verde (venceu)
+                        color: _isCorrect ? Colors.green : (_firstDetectionTime != null ? Colors.yellow : Colors.grey),
+                        width: _isCorrect ? 4 : (_firstDetectionTime != null ? 3 : 1),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12.0),
+                      child: _isCameraInitialized
+                          ? Center(
+                              child: AspectRatio(
+                                aspectRatio: _cameraController!.value.aspectRatio,
+                                child: CameraPreview(_cameraController!),
+                              ),
+                            )
+                          : const Center(child: CircularProgressIndicator(color: Colors.white)),
                     ),
                   ),
-          ],
-        ),
+                ),
+                const SizedBox(height: 20),
+                
+                // --- FEEDBACK E BARRA DE CONFIANÇA (FEATURE-015) ---
+                Column(
+                  children: [
+                    // Texto de Feedback
+                    if (_isCorrect)
+                      const Text("PARABÉNS! 🎉", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green))
+                    else if (_firstDetectionTime != null)
+                      Text(
+                        "Segure... ${_secondsHeld + 1}/$_secondsToHold",
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
+                      )
+                    else if (_detectedGesture != "Nenhum")
+                      Text("Detectado: $_detectedGesture", style: const TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.bold))
+                    else
+                      const Text("Posicione a mão...", style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    
+                    const SizedBox(height: 10),
+
+                    // BARRA DE PROGRESSO (Confiança)
+                    if (!_isCorrect) // Só mostra se ainda não venceu
+                      Column(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: LinearProgressIndicator(
+                              value: _detectedConfidence, // Valor de 0.0 a 1.0
+                              minHeight: 15,
+                              backgroundColor: Colors.grey[300],
+                              color: _getConfidenceColor(_detectedConfidence), // Muda de cor
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            "${(_detectedConfidence * 100).toInt()}% de certeza",
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                
+                const SizedBox(height: 20),
+                
+                // BOTÃO DE CONCLUIR
+                _isSavingProgress
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton.icon(
+                        icon: Icon(_isCorrect ? Icons.check_circle : Icons.lock),
+                        label: Text(_isCorrect ? 'Concluir Lição (+10 XP)' : 'Acerte o sinal para liberar'),
+                        onPressed: _isCorrect ? _saveProgress : null, 
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey[300],
+                          disabledForegroundColor: Colors.grey[600],
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          textStyle: const TextStyle(fontSize: 18),
+                        ),
+                      ),
+              ],
+            ),
+          ),
+
+          // 2. WIDGET DE CONFETE (CORRIGIDO E EXPANDIDO)
+          Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox.expand( // Garante que ocupe espaço para cair
+              child: ConfettiWidget(
+                confettiController: _confettiController,
+                blastDirectionality: BlastDirectionality.explosive, 
+                shouldLoop: false, 
+                colors: const [
+                  Colors.green, Colors.blue, Colors.pink, 
+                  Colors.orange, Colors.purple, Colors.red
+                ], 
+                numberOfParticles: 50, // Mais confetes
+                gravity: 0.3, 
+                minBlastForce: 10,
+                maxBlastForce: 30,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
