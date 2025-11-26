@@ -1,120 +1,154 @@
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart'; // 1. Importe o pacote da câmera
+import 'package:camera/camera.dart';
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic> lesson;
+
   const LessonDetailScreen({super.key, required this.lesson});
 
   @override
-  State<LessonDetailScreen> createState() => _LessonDetailScreenState();
+  _LessonDetailScreenState createState() => _LessonDetailScreenState();
 }
 
 class _LessonDetailScreenState extends State<LessonDetailScreen> {
   CameraController? _cameraController;
-  late Future<void> _initializeControllerFuture;
-  bool _isCameraInitialized = false;
+  bool _isCameraReady = false;
 
   @override
   void initState() {
     super.initState();
-    // Inicia a câmera assim que a tela for criada
     _initializeCamera();
   }
 
   Future<void> _initializeCamera() async {
-    // 1. Obter a lista de câmeras disponíveis
-    final cameras = await availableCameras();
-    
-    // 2. Selecionar a câmera frontal (selfie)
-    CameraDescription selectedCamera = cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first, // Se não achar a frontal, usa a primeira que tiver
-    );
+    try {
+      final cameras = await availableCameras();
+      final frontCamera = cameras.firstWhere(
+        (cam) => cam.lensDirection == CameraLensDirection.front,
+      );
 
-    // 3. Criar e inicializar o controlador
-    _cameraController = CameraController(
-      selectedCamera,
-      ResolutionPreset.medium,
-    );
+      _cameraController = CameraController(
+        frontCamera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
 
-    _initializeControllerFuture = _cameraController!.initialize();
+      await _cameraController!.initialize();
 
-    // 4. Atualizar a UI quando a câmera estiver pronta
-    _initializeControllerFuture.then((_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isCameraInitialized = true;
-      });
-      
-      // TODO: Iniciar o stream de imagens para o backend (Python)
-      // _cameraController!.startImageStream((image) {
-      //   // Enviar 'image' para a API de Visão Computacional
-      // });
-    }).catchError((e) {
-      print("Erro ao inicializar a câmera: $e");
-    });
+      if (!mounted) return;
+      setState(() => _isCameraReady = true);
+    } catch (e) {
+      debugPrint("Erro ao iniciar câmera: $e");
+    }
   }
 
   @override
   void dispose() {
-    // 5. Descartar o controlador quando a tela for fechada
     _cameraController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    const Color neonGreen = Color(0xFF00FF9D);
+    const Color darkBG = Color(0xFF02040A);
+    const Color cardDark = Color(0xFF050C1A);
+
     final String lessonTitle = widget.lesson['title'] ?? 'Lição';
+    final String description = widget.lesson['description'] ?? '';
 
     return Scaffold(
+      backgroundColor: darkBG,
       appBar: AppBar(
-        title: Text(lessonTitle),
+        backgroundColor: darkBG,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: neonGreen),
+        title: Text(
+          lessonTitle,
+          style: const TextStyle(
+            color: neonGreen,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
       ),
+
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // ... (o texto "Pratique o sinal para:" etc. continua igual)
+            // ---------- TÍTULO DA LIÇÃO ----------
             Text(
-              'Pratique o sinal para:',
-              style: Theme.of(context).textTheme.titleMedium,
+              "Pratique o sinal para:",
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 15,
+              ),
             ),
+            const SizedBox(height: 8),
             Text(
               lessonTitle,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: neonGreen,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 20),
 
-            // --- ÁREA DA CÂMERA ---
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: _isCameraInitialized
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12.0),
-                        // 6. Exibe a prévia da câmera
-                        child: CameraPreview(_cameraController!),
-                      )
-                    : const Center(
-                        // 7. Mostra um loading enquanto a câmera inicializa
-                        child: CircularProgressIndicator(color: Colors.white),
+            const SizedBox(height: 24),
+
+            // ---------- CAIXA COM CAMERA ----------
+            Container(
+              height: 380,
+              decoration: BoxDecoration(
+                color: cardDark,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: neonGreen.withOpacity(0.1),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: _isCameraReady
+                    ? CameraPreview(_cameraController!)
+                    : Container(
+                        color: Colors.black12,
+                        alignment: Alignment.center,
+                        child: const CircularProgressIndicator(
+                          color: neonGreen,
+                        ),
                       ),
               ),
             ),
-            const SizedBox(height: 20),
-            
-            const Center(
-              child: Text(
-                'Aguardando seu sinal...',
-                style: TextStyle(fontSize: 18, fontStyle: FontStyle.italic),
+
+            const SizedBox(height: 22),
+
+            // ---------- STATUS ----------
+            Text(
+              "Aguardando seu sinal...",
+              style: TextStyle(
+                color: neonGreen.withOpacity(0.9),
+                fontSize: 15,
+                fontStyle: FontStyle.italic,
               ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ---------- DESCRIÇÃO DA LIÇÃO ----------
+            Text(
+              description,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
