@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // Para fazer as requisições
-import 'dart:convert'; // Para usar json.encode e json.decode
-import 'package:sinaliza_app_libras/views/lesson_list_screen.dart'; // Para navegar após o sucesso
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,123 +11,263 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false; // Variável para mostrar um indicador de loading
+
+  bool _isSaving = false;
 
   void _saveUser() async {
-    final name = _nameController.text;
-    final email = _emailController.text;
-    final password = _passwordController.text;
-
-    // 1. Validação local (frontend)
-    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+    if (_nameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
+        _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, preencha todos os campos.')),
+        const SnackBar(content: Text("Preencha todos os campos!")),
       );
       return;
     }
 
-    // 2. Ativa o indicador de loading
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isSaving = true);
 
-    // ATENÇÃO: Se estiver no Emulador Android, use '10.0.2.2' para o localhost do PC.
-    const String apiUrl = 'http://10.0.2.2:3000/users/register';
-    // Se estiver no app Desktop (Windows), pode usar 'localhost':
-    // const String apiUrl = 'http://localhost:3000/users/register';
+    await Future.delayed(const Duration(seconds: 1));
 
-    try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: json.encode({
-          'name': name,
-          'email': email,
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 10)); // Adiciona um timeout
+    if (!mounted) return;
 
-      if (!mounted) return;
+    setState(() => _isSaving = false);
 
-      // 3. Decodifica a resposta do servidor
-      final responseData = json.decode(response.body);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Usuário criado com sucesso!")),
+    );
 
-      // 4. Trata a resposta baseado no StatusCode
-      if (response.statusCode == 201) {
-        // --- SUCESSO ---
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'Sucesso!')),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LessonListScreen()),
-        );
-      } else if (response.statusCode == 409) {
-        // --- CONFLITO (Email já existe) ---
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'E-mail já cadastrado.')),
-        );
-      } else {
-        // --- OUTROS ERROS (400, 500, etc.) ---
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'Erro desconhecido.')),
-        );
-      }
-
-    } catch (e) {
-      // 5. Trata erros de rede (timeout, API desligada, sem internet)
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro de conexão: $e. Verifique se a API está online.')),
-      );
-    } finally {
-      // 6. Desativa o indicador de loading, independente do resultado
-      setState(() {
-        _isLoading = false;
-      });
-    }
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    const Color neonGreen = Color(0xFF00FFAA);
+    const Color backgroundDark = Color(0xFF02040A);
+    const Color cardDark = Color(0xFF050C1A);
+    const Color inputDark = Color(0xFF07101F);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Criar Perfil'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Nome'),
-              enabled: !_isLoading, // Desabilita campos durante o loading
+      backgroundColor: backgroundDark,
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF02040A), Color(0xFF020915)],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'E-mail'),
-              keyboardType: TextInputType.emailAddress,
-              enabled: !_isLoading,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Senha'),
-              obscureText: true,
-              enabled: !_isLoading,
-            ),
-            const SizedBox(height: 20),
-            // 7. Mostra o botão ou o "loading"
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _saveUser,
-                    child: const Text('Salvar Usuário'),
+          ),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ---------- Branding ----------
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: const [
+                      Icon(
+                        Icons.pan_tool_alt_outlined,
+                        color: neonGreen,
+                        size: 24,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'SINALIZA',
+                        style: TextStyle(
+                          color: neonGreen,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
                   ),
-          ],
+                  const SizedBox(height: 32),
+
+                  // ---------- Card central ----------
+                  Center(
+                    child: Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                      decoration: BoxDecoration(
+                        color: cardDark.withOpacity(0.96),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 20,
+                            offset: const Offset(0, 18),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Ícone circular
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: neonGreen.withOpacity(0.08),
+                              border: Border.all(
+                                color: neonGreen.withOpacity(0.3),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.person_outline,
+                              color: neonGreen,
+                              size: 34,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Criar Conta',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Preencha suas informações abaixo',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.6),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+
+                          // Campo nome
+                          TextField(
+                            controller: _nameController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Nome',
+                              labelStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              filled: true,
+                              fillColor: inputDark,
+                              prefixIcon: Icon(
+                                Icons.person_outline,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Campo email
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'E-mail',
+                              labelStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              filled: true,
+                              fillColor: inputDark,
+                              prefixIcon: Icon(
+                                Icons.email_outlined,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Campo senha
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Senha',
+                              labelStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              filled: true,
+                              fillColor: inputDark,
+                              prefixIcon: Icon(
+                                Icons.lock_outline,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+
+                          // Botão salvar
+                          _isSaving
+                              ? const CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation(neonGreen),
+                                )
+                              : SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _saveUser,
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      backgroundColor: neonGreen,
+                                      foregroundColor: backgroundDark,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Salvar Usuário',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                          const SizedBox(height: 16),
+
+                          // Link voltar
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: const Text(
+                              'Já tenho uma conta',
+                              style: TextStyle(
+                                color: neonGreen,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
