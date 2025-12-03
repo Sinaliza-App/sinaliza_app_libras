@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
+// import 'package:sinaliza_app_libras/views/login_screen.dart'; // Se precisar voltar
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,10 +18,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _isSaving = false;
 
-  void _saveUser() async {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
+  // Função de Cadastro Real
+  Future<void> _saveUser() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // 1. Validação básica
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Preencha todos os campos!")),
       );
@@ -26,28 +35,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isSaving = true);
 
-    await Future.delayed(const Duration(seconds: 1));
+    // 2. Configuração da API
+    // ATENÇÃO: Use o IP correto (Radmin ou 10.0.2.2)
+    const String apiUrl = 'http://26.72.151.39:3000/users/register';
 
-    if (!mounted) return;
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
+        body: json.encode({
+          'name': name,
+          'email': email,
+          'password': password,
+        }),
+      ).timeout(const Duration(seconds: 10));
 
-    setState(() => _isSaving = false);
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Usuário criado com sucesso!")),
-    );
+      final responseData = json.decode(response.body);
 
-    Navigator.pop(context);
+      // 3. Tratamento da Resposta
+      if (response.statusCode == 201) {
+        // SUCESSO (Criado)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(responseData['message'] ?? "Usuário criado com sucesso!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Opção A: Ir direto para o Login (para ele logar e pegar o token)
+        Navigator.pop(context); 
+
+        // Opção B (Avançada): Se a rota /register já retornasse o token,
+        // poderíamos logar direto. Mas como ela só cria, mandamos para o Login.
+      
+      } else {
+        // ERRO (ex: email duplicado)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(responseData['message'] ?? "Erro ao criar usuário."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Erro de conexão: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color neonGreen = Color(0xFF00FFAA);
-    const Color backgroundDark = Color(0xFF02040A);
+    const Color neonGreen = Color(0xFF00FF9D);
+    const Color darkBackground = Color(0xFF02040A);
     const Color cardDark = Color(0xFF050C1A);
     const Color inputDark = Color(0xFF07101F);
 
     return Scaffold(
-      backgroundColor: backgroundDark,
+      backgroundColor: darkBackground,
       body: SafeArea(
         child: Container(
           decoration: const BoxDecoration(
@@ -65,7 +120,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   // ---------- Branding ----------
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
                     children: const [
                       Icon(
                         Icons.pan_tool_alt_outlined,
@@ -93,11 +147,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       constraints: const BoxConstraints(maxWidth: 420),
                       padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
                       decoration: BoxDecoration(
-                        color: cardDark.withOpacity(0.96),
+                        // Correção Linter: withValues
+                        color: cardDark.withValues(alpha: 0.96),
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.5),
+                            color: Colors.black.withValues(alpha: 0.5),
                             blurRadius: 20,
                             offset: const Offset(0, 18),
                           ),
@@ -112,19 +167,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             height: 72,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: neonGreen.withOpacity(0.08),
+                              color: neonGreen.withValues(alpha: 0.08),
                               border: Border.all(
-                                color: neonGreen.withOpacity(0.3),
+                                color: neonGreen.withValues(alpha: 0.3),
                                 width: 1.5,
                               ),
                             ),
                             child: const Icon(
-                              Icons.person_outline,
+                              Icons.person_add_alt_1_outlined, // Ícone de cadastro
                               color: neonGreen,
                               size: 34,
                             ),
                           ),
                           const SizedBox(height: 16),
+
                           const Text(
                             'Criar Conta',
                             style: TextStyle(
@@ -134,29 +190,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
+
                           Text(
                             'Preencha suas informações abaixo',
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.white.withOpacity(0.6),
+                              color: Colors.white.withValues(alpha: 0.6),
                             ),
                           ),
+
                           const SizedBox(height: 28),
 
-                          // Campo nome
+                          // Campo Nome
                           TextField(
                             controller: _nameController,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'Nome',
                               labelStyle: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               filled: true,
                               fillColor: inputDark,
                               prefixIcon: Icon(
                                 Icons.person_outline,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -168,9 +226,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                           ),
+
                           const SizedBox(height: 14),
 
-                          // Campo email
+                          // Campo Email
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
@@ -178,23 +237,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             decoration: InputDecoration(
                               labelText: 'E-mail',
                               labelStyle: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               filled: true,
                               fillColor: inputDark,
                               prefixIcon: Icon(
                                 Icons.email_outlined,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                                 borderSide: BorderSide.none,
                               ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                              ),
                             ),
                           ),
+
                           const SizedBox(height: 14),
 
-                          // Campo senha
+                          // Campo Senha
                           TextField(
                             controller: _passwordController,
                             obscureText: true,
@@ -202,23 +265,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             decoration: InputDecoration(
                               labelText: 'Senha',
                               labelStyle: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               filled: true,
                               fillColor: inputDark,
                               prefixIcon: Icon(
                                 Icons.lock_outline,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                                 borderSide: BorderSide.none,
                               ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                              ),
                             ),
                           ),
+
                           const SizedBox(height: 22),
 
-                          // Botão salvar
+                          // Botão Salvar
                           _isSaving
                               ? const CircularProgressIndicator(
                                   valueColor: AlwaysStoppedAnimation(neonGreen),
@@ -232,13 +299,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         vertical: 16,
                                       ),
                                       backgroundColor: neonGreen,
-                                      foregroundColor: backgroundDark,
+                                      foregroundColor: darkBackground,
+                                      elevation: 0,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(18),
                                       ),
                                     ),
                                     child: const Text(
-                                      'Salvar Usuário',
+                                      'Criar Conta',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
@@ -246,18 +314,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ),
                                 ),
+
                           const SizedBox(height: 16),
 
-                          // Link voltar
+                          // Link Voltar
                           GestureDetector(
                             onTap: () => Navigator.pop(context),
-                            child: const Text(
-                              'Já tenho uma conta',
-                              style: TextStyle(
-                                color: neonGreen,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                            child: Text.rich(
+                              TextSpan(
+                                text: 'Já tenho uma conta? ',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 13,
+                                ),
+                                children: const [
+                                  TextSpan(
+                                    text: 'Fazer Login',
+                                    style: TextStyle(
+                                      color: neonGreen,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ],
