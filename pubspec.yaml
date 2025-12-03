@@ -34,10 +34,29 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.1
 
 
   flutter_lints: ^5.0.0
 
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  min_sdk_android: 21 # Importante para manter compatibilidade
+  adaptive_icon_background: "#000000" # Fundo preto para combinar com sua logo
+  adaptive_icon_foreground: "assets/images/app_icon.png"
+
+# Configuração da TELA DE SPLASH NATIVA
+flutter_native_splash:
+  color: "#02040A" # A cor de fundo escura do seu app
+  image: "assets/images/app_icon.png"
+  fullscreen: true
+  android: true
+  ios: true
 flutter:
 
   uses-material-design: true
+

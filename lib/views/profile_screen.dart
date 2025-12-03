@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 // import 'package:sinaliza_app_libras/views/login_screen.dart'; // Se precisar voltar
 
 class ProfileScreen extends StatefulWidget {
@@ -18,13 +17,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _isSaving = false;
 
-  // Função de Cadastro Real
+  // --- NOVA FUNÇÃO DE VALIDAÇÃO DETALHADA ---
+  // Retorna null se a senha for válida, ou a mensagem de erro específica.
+  String? _getPasswordError(String password) {
+    if (password.length < 8) {
+      return 'A senha deve ter pelo menos 8 caracteres.';
+    }
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      return 'A senha deve conter pelo menos uma letra MAIÚSCULA.';
+    }
+    if (!password.contains(RegExp(r'[a-z]'))) {
+      return 'A senha deve conter pelo menos uma letra minúscula.';
+    }
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      return 'A senha deve conter pelo menos um número.';
+    }
+    if (!password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+      return 'A senha deve conter um caractere especial (ex: @, #, \$).';
+    }
+    return null; // Senha válida!
+  }
+  // -------------------------------------------
+
   Future<void> _saveUser() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    // 1. Validação básica
+    // 1. Validação básica de campos vazios
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -33,9 +53,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    // 2. Validação de Senha Específica (MUDANÇA AQUI)
+    final String? passwordError = _getPasswordError(password);
+    
+    if (passwordError != null) {
+      // Se houver erro, mostra a mensagem específica
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(passwordError), // Mostra exatamente o que falta
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return; // Para a execução aqui
+    }
+
     setState(() => _isSaving = true);
 
-    // 2. Configuração da API
+    // 3. Configuração da API
     // ATENÇÃO: Use o IP correto (Radmin ou 10.0.2.2)
     const String apiUrl = 'http://26.72.151.39:3000/users/register';
 
@@ -54,24 +90,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final responseData = json.decode(response.body);
 
-      // 3. Tratamento da Resposta
       if (response.statusCode == 201) {
-        // SUCESSO (Criado)
+        // SUCESSO
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(responseData['message'] ?? "Usuário criado com sucesso!"),
             backgroundColor: Colors.green,
           ),
         );
-
-        // Opção A: Ir direto para o Login (para ele logar e pegar o token)
         Navigator.pop(context); 
-
-        // Opção B (Avançada): Se a rota /register já retornasse o token,
-        // poderíamos logar direto. Mas como ela só cria, mandamos para o Login.
-      
       } else {
-        // ERRO (ex: email duplicado)
+        // ERRO DE API
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(responseData['message'] ?? "Erro ao criar usuário."),
@@ -118,7 +147,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ---------- Branding ----------
                   Row(
                     children: const [
                       Icon(
@@ -140,14 +168,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // ---------- Card central ----------
                   Center(
                     child: Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(maxWidth: 420),
                       padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
                       decoration: BoxDecoration(
-                        // Correção Linter: withValues
                         color: cardDark.withValues(alpha: 0.96),
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
@@ -161,7 +187,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Ícone circular
                           Container(
                             width: 72,
                             height: 72,
@@ -174,7 +199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             child: const Icon(
-                              Icons.person_add_alt_1_outlined, // Ícone de cadastro
+                              Icons.person_add_alt_1_outlined,
                               color: neonGreen,
                               size: 34,
                             ),
@@ -201,7 +226,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           const SizedBox(height: 28),
 
-                          // Campo Nome
                           TextField(
                             controller: _nameController,
                             style: const TextStyle(color: Colors.white),
@@ -229,7 +253,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           const SizedBox(height: 14),
 
-                          // Campo Email
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
@@ -257,7 +280,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           const SizedBox(height: 14),
 
-                          // Campo Senha
                           TextField(
                             controller: _passwordController,
                             obscureText: true,
@@ -285,7 +307,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           const SizedBox(height: 22),
 
-                          // Botão Salvar
                           _isSaving
                               ? const CircularProgressIndicator(
                                   valueColor: AlwaysStoppedAnimation(neonGreen),
@@ -317,7 +338,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           const SizedBox(height: 16),
 
-                          // Link Voltar
                           GestureDetector(
                             onTap: () => Navigator.pop(context),
                             child: Text.rich(
