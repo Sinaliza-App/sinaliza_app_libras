@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sinaliza_app_libras/views/lesson_list_screen.dart'; // Para onde iremos após o login
+import 'package:sinaliza_app_libras/views/profile_screen.dart'; // Para o usuário poder se cadastrar
+import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 1. IMPORTADO
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
@@ -62,6 +65,10 @@ class _LoginScreenState extends State<LoginScreen> {
         await _storage.write(key: 'user_email', value: userData['email']);
         // ---------------------------------------------
 
+        Provider.of<UserProvider>(context, listen: false).setUser(userData);
+
+        // 4. Salve o token com segurança no dispositivo
+        await _storage.write(key: 'jwt_token', value: token);
         Provider.of<UserProvider>(context, listen: false).setUser(userData);
 
         ScaffoldMessenger.of(context).showSnackBar(
