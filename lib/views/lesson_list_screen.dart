@@ -21,8 +21,13 @@ class LessonListScreen extends StatefulWidget {
 
 class _LessonListScreenState extends State<LessonListScreen> {
   final _storage = const FlutterSecureStorage();
-  // Correção: Definindo a variável _dataFuture que faltava
   late Future<CombinedLessonData> _dataFuture;
+
+  // Paleta Neon utilizada no app todo
+  static const Color backgroundDark = Color(0xFF02040A);
+  static const Color cardDark = Color(0xFF07101F);
+  static const Color neonGreen = Color(0xFF00FF9D);
+  static const Color neonPurple = Color(0xFF7A5CFF);
 
   @override
   void initState() {
@@ -43,28 +48,32 @@ class _LessonListScreenState extends State<LessonListScreen> {
       throw Exception('Token não encontrado.');
     }
 
-    const String baseUrl = 'http://26.72.151.39:3000'; // Use seu IP
+    const String baseUrl = 'http://26.72.151.39:3000';
     final headers = {'Authorization': 'Bearer $token'};
 
     try {
       final responses = await Future.wait([
         http.get(Uri.parse('$baseUrl/lessons'), headers: headers),
-        http.get(Uri.parse('$baseUrl/progress'), headers: headers)
+        http.get(Uri.parse('$baseUrl/progress'), headers: headers),
       ]);
 
-      final lessonsResponse = responses[0];
-      final progressResponse = responses[1];
+      if (responses[0].statusCode != 200)
+        throw Exception('Erro ao carregar lições');
+      if (responses[1].statusCode != 200)
+        throw Exception('Erro ao carregar progresso');
 
-      if (lessonsResponse.statusCode != 200) throw Exception('Erro lessons');
-      if (progressResponse.statusCode != 200) throw Exception('Erro progress');
+      final lessons = (json.decode(responses[0].body) as List)
+          .cast<Map<String, dynamic>>();
+      final progress = json.decode(responses[1].body);
 
-      final List<dynamic> lessonsData = json.decode(lessonsResponse.body);
-      final List<Map<String, dynamic>> lessons = lessonsData.cast<Map<String, dynamic>>();
+      final completedIds = progress
+          .map<int>((p) => p['lesson_id'] as int)
+          .toSet();
 
-      final List<dynamic> progressData = json.decode(progressResponse.body);
-      final Set<int> completedIds = progressData.map((p) => p['lesson_id'] as int).toSet();
-
-      return CombinedLessonData(lessons: lessons, completedLessonIds: completedIds);
+      return CombinedLessonData(
+        lessons: lessons,
+        completedLessonIds: completedIds,
+      );
     } catch (e) {
       throw Exception('Erro de conexão: $e');
     }
@@ -83,49 +92,143 @@ class _LessonListScreenState extends State<LessonListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lições de Libras'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const ProfilePage())),
-          ),
-        ],
-      ),
-      body: FutureBuilder<CombinedLessonData>(
-        future: _dataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: Text('Nenhuma lição encontrada.'));
-          }
+      backgroundColor: backgroundDark,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ---------------- HEADER CUSTOMIZADO ----------------
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.pan_tool_alt, color: neonGreen, size: 26),
+                      SizedBox(width: 8),
+                      Text(
+                        "SINALIZA",
+                        style: TextStyle(
+                          color: neonGreen,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.person, color: Colors.white),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProfilePage()),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-          final lessons = snapshot.data!.lessons;
-          // Correção: Usando completedLessonIds que vem do snapshot
-          final completedIds = snapshot.data!.completedLessonIds;
+            // ---------------- LISTA DE LIÇÕES ----------------
+            Expanded(
+              child: FutureBuilder<CombinedLessonData>(
+                future: _dataFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: neonGreen),
+                    );
+                  }
 
-          return ListView.builder(
-            itemCount: lessons.length,
-            itemBuilder: (context, index) {
-              final lesson = lessons[index];
-              final isCompleted = completedIds.contains(lesson['id']);
+                  if (!snapshot.hasData) {
+                    return const Center(
+                      child: Text(
+                        'Nenhuma lição encontrada.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    );
+                  }
 
-              return ListTile(
-                title: Text(lesson['title']),
-                trailing: isCompleted ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (c) => LessonDetailScreen(lesson: lesson)),
+                  final lessons = snapshot.data!.lessons;
+                  final completed = snapshot.data!.completedLessonIds;
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: lessons.length,
+                    itemBuilder: (context, index) {
+                      final lesson = lessons[index];
+                      final bool isDone = completed.contains(lesson["id"]);
+
+                      return GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  LessonDetailScreen(lesson: lesson),
+                            ),
+                          );
+                          _refreshData();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 18),
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: cardDark,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isDone ? neonGreen : neonPurple,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isDone ? neonGreen : neonPurple)
+                                    .withOpacity(0.35),
+                                blurRadius: 12,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    isDone
+                                        ? Icons.star
+                                        : Icons.lock_outline_rounded,
+                                    color: isDone ? neonGreen : neonPurple,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    lesson["title"],
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                lesson["description"] ?? "",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   );
-                  if (mounted) _refreshData();
                 },
-              );
-            },
-          );
-        },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
