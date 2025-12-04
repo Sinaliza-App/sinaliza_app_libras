@@ -19,11 +19,17 @@ class _ProfilePageState extends State<ProfilePage> {
   final _storage = const FlutterSecureStorage();
   bool _isLoading = false;
 
-  // Cores do Tema (Baseado no seu Login)
+  // Cores do Tema
   static const Color neonGreen = Color(0xFF00FF9D);
   static const Color neonPurple = Color(0xFF8E5CFF);
-  static const Color darkBackground = Color(0xFF02040A);
-  static const Color cardDark = Color(0xFF050C1A);
+  static const Color neonRed = Color(0xFFFF4B4B);
+  static const Color neonBlue = Color(0xFF00D1FF);
+  
+  // --- CORES DO DEGRADÊ (IGUAIS À LESSON LIST) ---
+  static const Color darkBG = Color(0xFF02040A);   // Topo
+  static const Color darkBG2 = Color(0xFF020915);  // Fundo
+  
+  static const Color cardDark = Color(0xFF07101F); // Fundo dos cards
 
   @override
   void initState() {
@@ -31,16 +37,18 @@ class _ProfilePageState extends State<ProfilePage> {
     _refreshUserData();
   }
 
-  // Função para buscar dados atualizados (incluindo XP)
   Future<void> _refreshUserData() async {
     setState(() {
       _isLoading = true;
     });
 
     final token = await _storage.read(key: 'jwt_token');
-    if (token == null) return;
+    if (token == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
-    // ATENÇÃO: Use o IP correto (10.0.2.2 ou Radmin)
+    // ATENÇÃO: Ajuste o IP conforme necessário (10.0.2.2 ou Radmin)
     const String apiUrl = 'http://26.72.151.39:3000/users/me';
 
     try {
@@ -53,7 +61,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (response.statusCode == 200) {
         final userData = json.decode(response.body);
-        // Atualiza o Provider com os dados novos
         Provider.of<UserProvider>(context, listen: false).setUser(userData);
       }
     } catch (e) {
@@ -67,7 +74,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _logout() async {
+  Future<void> _logout(BuildContext context) async {
     await _storage.delete(key: 'jwt_token');
     
     if (!mounted) return;
@@ -82,163 +89,228 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Lê os dados do Provider
     final userProvider = context.watch<UserProvider>();
     final user = userProvider.user;
 
     return Scaffold(
-      backgroundColor: darkBackground,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          "Meu Perfil",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+      // REMOVIDO backgroundColor sólido
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        // --- AQUI ESTÁ O DEGRADÊ VERTICAL DE DUAS CORES ---
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [darkBG, darkBG2], // As cores exatas da LessonList
+          ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: neonGreen),
-            onPressed: _refreshUserData,
-          )
-        ],
-      ),
-      body: _isLoading && user == null
-          ? const Center(child: CircularProgressIndicator(color: neonGreen))
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Center(
-                child: Column(
+        child: SafeArea(
+          child: Column(
+            children: [
+              // --- HEADER PERSONALIZADO (Para substituir a AppBar) ---
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const SizedBox(height: 20),
-
-                    // 1. AVATAR COM BORDA NEON
+                    // Botão Voltar
                     Container(
-                      width: 120,
-                      height: 120,
                       decoration: BoxDecoration(
-                        color: cardDark,
+                        color: Colors.white.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
-                        border: Border.all(color: neonGreen, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: neonGreen.withValues(alpha: 0.4), // Correção Linter
-                            blurRadius: 16,
-                          ),
-                        ],
                       ),
-                      child: const Icon(Icons.person, color: Colors.white, size: 60),
-                    ),
-
-                    const SizedBox(height: 22),
-
-                    // 2. NOME E EMAIL
-                    Text(
-                      user?.name ?? 'Nome não encontrado',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                        onPressed: () => Navigator.pop(context),
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      user?.email ?? 'E-mail não encontrado',
+                    
+                    // Título
+                    const Text(
+                      "MEU PERFIL",
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7), // Correção Linter
-                        fontSize: 14,
+                        color: neonGreen, 
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                        letterSpacing: 1.5,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-
-                    const SizedBox(height: 40),
-
-                    // 3. CARD DE PONTUAÇÃO (XP)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      //botão refresh
+                      Container(
                       decoration: BoxDecoration(
-                        color: cardDark,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blueAccent.withValues(alpha: 0.1),
-                            blurRadius: 10,
-                          )
-                        ],
+                        color: Colors.white.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
                       ),
-                      child: Column(
-                        children: [
-                          const Text(
-                            "Total de XP",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          _isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
-                                )
-                              : Text(
-                                  "${user?.totalScore ?? 0}",
-                                  style: const TextStyle(
-                                    fontSize: 42,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blueAccent,
-                                  ),
-                                ),
-                        ],
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, color: Colors.white),
+                        onPressed: _refreshUserData,
                       ),
                     ),
-
-                    const Spacer(),
-
-                    // 4. BOTÃO DE LOGOUT
-                    GestureDetector(
-                      onTap: _logout,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: neonPurple.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: neonPurple, width: 1.6),
-                          boxShadow: [
-                            BoxShadow(
-                              color: neonPurple.withValues(alpha: 0.1),
-                              blurRadius: 12,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.logout, color: neonPurple),
-                            SizedBox(width: 10),
-                            Text(
-                              "Sair (Logout)",
-                              style: TextStyle(
-                                color: neonPurple,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
                   ],
                 ),
               ),
-            ),
+              // --- CONTEÚDO DA TELA ---
+                Expanded(
+                child: _isLoading && user == null
+                    ? const Center(child: CircularProgressIndicator(color: neonGreen))
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 10),
+
+                            // 1. AVATAR COM BORDA NEON
+                            Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: cardDark,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: neonGreen, width: 3),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: neonGreen.withValues(alpha: 0.4),
+                                    blurRadius: 16,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.person, color: Colors.white, size: 60),
+                            ),
+
+                            const SizedBox(height: 22),
+
+                            // 2. NOME E EMAIL
+                            // 2. INFORMAÇÕES DO USUÁRIO
+                            Text(
+                              user?.name ?? 'Usuário',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              user?.email ?? 'email@exemplo.com',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+
+                            const SizedBox(height: 40),
+
+                            // 3. CARD DE PONTUAÇÃO (XP)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: cardDark,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: neonBlue.withValues(alpha: 0.3),
+                                  width: 1.5
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.3),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    "EXPERIÊNCIA TOTAL",
+                                    style: TextStyle(
+                                      color: neonBlue,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _isLoading 
+                                    ? const SizedBox(
+                                        height: 30, width: 30, 
+                                        child: CircularProgressIndicator(color: neonBlue)
+                                      )
+                                    : Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                                        textBaseline: TextBaseline.alphabetic,
+                                        children: [
+                                          Text(
+                                            "${user?.totalScore ?? 0}",
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 48,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Text(
+                                            "XP",
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 40),
+                            // 4. BOTÃO DE LOGOUT
+                            InkWell(
+                              onTap: () => _logout(context),
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                height: 60,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: neonRed.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: neonRed.withValues(alpha: 0.5),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.logout_rounded, color: neonRed),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      "Sair da Conta",
+                                      style: TextStyle(
+                                        color: neonRed,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -127,7 +127,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     const Color neonGreen = Color(0xFF00FF9D);
     const Color darkBackground = Color(0xFF02040A);
-    const Color cardDark = Color(0xFF050C1A);
+    const Color cardDark = Color(0xFF020915);
     const Color inputDark = Color(0xFF07101F);
 
     return Scaffold(
@@ -150,7 +150,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Row(
                     children: const [
                       Icon(
-                        Icons.pan_tool_alt_outlined,
+                        Icons.waving_hand_outlined,
                         color: neonGreen,
                         size: 24,
                       ),
@@ -159,9 +159,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'SINALIZA',
                         style: TextStyle(
                           color: neonGreen,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
                         ),
                       ),
                     ],

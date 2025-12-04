@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -26,7 +25,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   // Câmera
   CameraController? _cameraController;
   late Future<void> _initializeControllerFuture;
-  bool _isCameraInitialized = false;
   bool _isCameraReady = false;
 
   // WebSocket e Jogo
@@ -97,11 +95,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       await _initializeControllerFuture;
 
       if (!mounted) return;
+      if (!mounted) return;
       setState(() {
-        _isCameraInitialized = true;
         _isCameraReady = true;
       });
-
       _connectToWebSocket();
     } catch (e) {
       debugPrint("Erro ao iniciar câmera: $e");

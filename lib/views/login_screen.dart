@@ -3,9 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
-
-// Imports das telas e providers
-import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
+import 'package:sinaliza_app_libras/views/module_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_screen.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
@@ -74,7 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const LessonListScreen()),
+          MaterialPageRoute(builder: (context) => const ModuleListScreen()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -112,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     const Color neonGreen = Color(0xFF00FF9D);
     const Color darkBackground = Color(0xFF02040A);
-    const Color cardDark = Color(0xFF050C1A);
+    const Color cardDark = Color(0xFF020915);
     const Color inputDark = Color(0xFF07101F);
 
     return Scaffold(
@@ -134,15 +132,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.pan_tool_alt_outlined, color: neonGreen, size: 24),
+                      Icon(Icons.waving_hand_outlined, color: neonGreen, size: 30),
                       SizedBox(width: 8),
                       Text(
                         'SINALIZA',
                         style: TextStyle(
                           color: neonGreen,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
                         ),
                       ),
                     ],
@@ -160,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 20,
+                            blurRadius: 10,
                             offset: const Offset(0, 18),
                           ),
                         ],
@@ -179,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 width: 1.5,
                               ),
                             ),
-                            child: const Icon(Icons.public, color: neonGreen, size: 34),
+                            child: const Icon(Icons.login_rounded, color: neonGreen, size: 34),
                           ),
                           const SizedBox(height: 16),
                           const Text(

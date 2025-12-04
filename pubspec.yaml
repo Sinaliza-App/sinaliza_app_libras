@@ -51,11 +51,16 @@ flutter_launcher_icons:
 
 # Configuração da TELA DE SPLASH NATIVA
 flutter_native_splash:
-  color: "#02040A" # A cor de fundo escura do seu app
+  color: "#02040A"        # Cor para modo claro
+  color_dark: "#02040A"   # Cor para modo escuro (Adicione esta linha!)
   image: "assets/images/app_icon.png"
   fullscreen: true
   android: true
   ios: true
+  android_12:             # Configuração específica para Android 12+
+    color: "#02040A"      # Cor de fundo
+    color_dark: "#02040A" # Cor de fundo no modo escuro
+    image: "assets/images/app_icon.png"
 flutter:
 
   uses-material-design: true
