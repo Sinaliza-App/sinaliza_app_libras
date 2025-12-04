@@ -74,8 +74,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _confettiController.dispose();
     super.dispose();
   }
+  DateTime? _lastFrameTime;
 
-  Future<void> _initializeCamera() async {
+Future<void> _initializeCamera() async {
     try {
       final cameras = await availableCameras();
       final selectedCamera = cameras.firstWhere(
@@ -85,15 +86,15 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       _cameraController = CameraController(
         selectedCamera,
-        ResolutionPreset.medium,
+        // MUDANÇA 1: Usar 'low' ou 'medium' para performance rápida
+        // 'low' geralmente é 320x240, perfeito para ML em tempo real via rede.
+        ResolutionPreset.low, 
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
 
-      _initializeControllerFuture = _cameraController!.initialize();
-
-      await _initializeControllerFuture;
-
+      await _cameraController!.initialize();
+      
       if (!mounted) return;
       if (!mounted) return;
       setState(() {
@@ -105,15 +106,28 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
-  void _connectToWebSocket() {
+void _connectToWebSocket() {
     try {
       // ATENÇÃO: Ajuste o IP conforme necessário (10.0.2.2 ou Radmin)
       final wsUrl = Uri.parse('ws://26.72.151.39:8080');
       _channel = WebSocketChannel.connect(wsUrl);
 
       _cameraController!.startImageStream((CameraImage image) {
-        if (_isStreaming) return;
+        // 1. PROTEÇÃO DE SOBRECARGA (THROTTLING)
+        // Verifica se já passaram 100ms desde o último envio
+        final now = DateTime.now();
+        if (_lastFrameTime != null && 
+            now.difference(_lastFrameTime!).inMilliseconds < 100) {
+          return; // Ignora este frame se for muito cedo
+        }
+        _lastFrameTime = now; // Atualiza o tempo do último envio
+
+        // 2. PROTEÇÃO DE FLUXO
+        // Evita enviar se já estivermos processando um frame anterior
+        if (_isStreaming) return; 
         _isStreaming = true;
+
+        // 3. PREPARAÇÃO E ENVIO DA IMAGEM (Igual ao anterior)
         final plane = image.planes[0];
         final String imageBase64 = base64Encode(plane.bytes);
 
@@ -125,6 +139,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         }));
       });
 
+      // 4. ESCUTA DE RESPOSTAS (Igual ao anterior)
       _streamSubscription = _channel?.stream.listen((message) {
         if (!mounted) return;
         final data = json.decode(message);
@@ -158,7 +173,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           _detectedConfidence = confidence;
         });
 
-        _isStreaming = false;
+        _isStreaming = false; // Libera para o próximo frame
       }, onError: (error) {
         debugPrint("Erro no WebSocket: $error");
         _isStreaming = false;
@@ -218,12 +233,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
-      } else if (response.statusCode == 409) {
+        Navigator.pop(context, true); 
+        } else if (response.statusCode == 409) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Você já completou esta lição.')),
+          SnackBar(
+            content: Text(responseData['message'] ?? 'Lição já concluída.'),
+            backgroundColor: Colors.orange,
+          ),
         );
-        Navigator.pop(context);
+        // MUDANÇA AQUI: Também retorna 'true' se já estava completa
+        Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Erro ao salvar.')),

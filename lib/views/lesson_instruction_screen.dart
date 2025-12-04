@@ -33,11 +33,13 @@ class LessonInstructionScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              "Instruções",
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 14),
+              "INSTRUÇÕES DA LIÇÃO",
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 25,fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,),
               textAlign: TextAlign.center,
+              
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 20),
             Text(
               title,
               style: const TextStyle(
@@ -109,15 +111,22 @@ class LessonInstructionScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // Agora sim, vai para a câmera (LessonDetailScreen)
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LessonDetailScreen(lesson: lesson),
-                    ),
-                  );
-                },
+                onPressed: () async {
+                    // MUDANÇA AQUI:
+                    // 1. Usamos push normal (para não fechar esta tela ainda)
+                    // 2. Esperamos o resultado da tela da câmera (true se completou)
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => LessonDetailScreen(lesson: lesson),
+                      ),
+                    );
+
+                    // 3. Se voltou com 'true' (sucesso), fechamos esta tela de instrução também
+                    if (result == true && context.mounted) {
+                      Navigator.pop(context, true); // Passa o 'true' para a lista
+                    }
+                  },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: neonGreen,
                   foregroundColor: darkBG,
