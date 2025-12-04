@@ -25,7 +25,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor, preencha e-mail e senha.')),
       );
@@ -36,15 +35,16 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // ATENÇÃO: Ajuste o IP conforme necessário
     const String apiUrl = 'http://26.72.151.39:3000/users/login';
 
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: json.encode({'email': email, 'password': password}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse(apiUrl),
+            headers: {'Content-Type': 'application/json; charset=UTF-8'},
+            body: json.encode({'email': email, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
@@ -54,19 +54,23 @@ class _LoginScreenState extends State<LoginScreen> {
         final String token = responseData['token'];
         final Map<String, dynamic> userData = responseData['user'];
 
-        // Salvar dados
+        // ---------------------------------------------
+        // 🔥 SALVANDO DADOS DO USUÁRIO NO STORAGE
+        // ---------------------------------------------
         await _storage.write(key: 'jwt_token', value: token);
-        // Opcional: Salvar dados individuais se necessário
-        // await _storage.write(key: 'user_name', value: userData['name']);
+        await _storage.write(key: 'user_name', value: userData['name']);
+        await _storage.write(key: 'user_email', value: userData['email']);
+        // ---------------------------------------------
 
-        if (!mounted) return;
-        // Atualizar Provider
+        Provider.of<UserProvider>(context, listen: false).setUser(userData);
+
+        // 4. Salve o token com segurança no dispositivo
+        await _storage.write(key: 'jwt_token', value: token);
         Provider.of<UserProvider>(context, listen: false).setUser(userData);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(responseData['message'] ?? 'Login bem-sucedido!'),
-            backgroundColor: Colors.green,
           ),
         );
 
@@ -77,8 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(responseData['message'] ?? 'E-mail ou senha inválidos.'),
-            backgroundColor: Colors.red,
+            content: Text(
+              responseData['message'] ?? 'E-mail ou senha inválidos.',
+            ),
           ),
         );
       }
@@ -86,16 +91,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Erro de conexão: $e'),
-          backgroundColor: Colors.red,
+          content: Text('Erro de conexão: $e. Verifique se a API está online.'),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -131,6 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
                     children: const [
                       Icon(Icons.waving_hand_outlined, color: neonGreen, size: 30),
                       SizedBox(width: 8),
@@ -146,14 +149,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 32),
+
                   Center(
                     child: Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(maxWidth: 420),
                       padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
                       decoration: BoxDecoration(
-                        // Correção: withValues em vez de withOpacity
-                        color: cardDark.withValues(alpha: 0.96),
+                        color: cardDark.withOpacity(0.96),
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
@@ -171,80 +174,140 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 72,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: neonGreen.withValues(alpha: 0.08),
+                              color: neonGreen.withOpacity(0.08),
                               border: Border.all(
-                                color: neonGreen.withValues(alpha: 0.3),
+                                color: neonGreen.withOpacity(0.3),
                                 width: 1.5,
                               ),
                             ),
                             child: const Icon(Icons.login_rounded, color: neonGreen, size: 34),
                           ),
                           const SizedBox(height: 16),
+
                           const Text(
                             'Entrar',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white),
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
                           ),
                           const SizedBox(height: 4),
+
                           Text(
                             'Acesse sua conta para continuar',
-                            style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.6)),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.6),
+                            ),
                           ),
+
                           const SizedBox(height: 28),
+
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'E-mail',
-                              labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                              labelStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                              ),
                               filled: true,
                               fillColor: inputDark,
-                              prefixIcon: Icon(Icons.email_outlined, color: Colors.white.withValues(alpha: 0.7)),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                              prefixIcon: Icon(
+                                Icons.email_outlined,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                              ),
                             ),
                           ),
+
                           const SizedBox(height: 14),
+
                           TextField(
                             controller: _passwordController,
                             obscureText: true,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'Senha',
-                              labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                              labelStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                              ),
                               filled: true,
                               fillColor: inputDark,
-                              prefixIcon: Icon(Icons.lock_outline, color: Colors.white.withValues(alpha: 0.7)),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                              prefixIcon: Icon(
+                                Icons.lock_outline,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                              ),
                             ),
                           ),
+
                           const SizedBox(height: 22),
+
                           _isLoading
-                              ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(neonGreen))
+                              ? const CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    neonGreen,
+                                  ),
+                                )
                               : SizedBox(
                                   width: double.infinity,
                                   child: ElevatedButton(
                                     onPressed: _loginUser,
                                     style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
                                       backgroundColor: neonGreen,
                                       foregroundColor: darkBackground,
                                       elevation: 0,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
                                     ),
-                                    child: const Text('Entrar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                    child: const Text(
+                                      'Entrar',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ),
                                 ),
+
                           const SizedBox(height: 16),
+
                           GestureDetector(
                             onTap: _isLoading ? null : _goToRegisterScreen,
                             child: Text.rich(
                               TextSpan(
                                 text: 'Não tem uma conta? ',
-                                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 13,
+                                ),
                                 children: const [
-                                  TextSpan(text: 'Cadastre-se', style: TextStyle(color: neonGreen, fontWeight: FontWeight.w600)),
+                                  TextSpan(
+                                    text: 'Cadastre-se',
+                                    style: TextStyle(
+                                      color: neonGreen,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ],
                               ),
                               textAlign: TextAlign.center,
