@@ -17,33 +17,37 @@ class LessonDetailScreen extends StatefulWidget {
 }
 
 class _LessonDetailScreenState extends State<LessonDetailScreen> {
-  // Cores
+  // --- PALETA DE CORES NEON ---
   static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color darkBG = Color(0xFF02040A);
-  static const Color cardDark = Color(0xFF050C1A);
+  static const Color neonOrange = Color(0xFFFF9900);
+  
+  // --- CORES DO DEGRADÊ DE FUNDO (IGUAIS ÀS OUTRAS TELAS) ---
+  static const Color bgTop = Color(0xFF02040A);      // Preto (Topo)
+  static const Color bgBottom = Color(0xFF020915);   // Azul Escuro (Fundo)
+  static const Color cardDark = Color(0xFF0A1223);   // Fundo dos painéis
 
-  // Câmera
+  // --- CÂMERA ---
   CameraController? _cameraController;
-  late Future<void> _initializeControllerFuture;
   bool _isCameraReady = false;
 
-  // WebSocket e Jogo
+  // --- WEBSOCKET ---
   WebSocketChannel? _channel;
   StreamSubscription? _streamSubscription;
   bool _isStreaming = false;
+  DateTime? _lastFrameTime;
 
-  // Estado do Jogo
-  String _detectedGesture = "Posicione a mão...";
+  // --- ESTADO DO JOGO ---
+  String _detectedGesture = "Nenhum";
   double _detectedConfidence = 0.0;
   bool _isCorrect = false;
   String _targetGesture = "";
 
-  // Variáveis do Temporizador
+  // --- TEMPORIZADOR ---
   DateTime? _firstDetectionTime;
   final int _secondsToHold = 3;
   int _secondsHeld = 0;
 
-  // Progresso e Efeitos
+  // --- PROGRESSO ---
   bool _isSavingProgress = false;
   final _storage = const FlutterSecureStorage();
   late ConfettiController _confettiController;
@@ -53,7 +57,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     super.initState();
     _extractTargetGesture();
     _initializeCamera();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
   }
 
   void _extractTargetGesture() {
@@ -74,9 +78,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _confettiController.dispose();
     super.dispose();
   }
-  DateTime? _lastFrameTime;
 
-Future<void> _initializeCamera() async {
+  Future<void> _initializeCamera() async {
     try {
       final cameras = await availableCameras();
       final selectedCamera = cameras.firstWhere(
@@ -86,48 +89,38 @@ Future<void> _initializeCamera() async {
 
       _cameraController = CameraController(
         selectedCamera,
-        // MUDANÇA 1: Usar 'low' ou 'medium' para performance rápida
-        // 'low' geralmente é 320x240, perfeito para ML em tempo real via rede.
         ResolutionPreset.low, 
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
 
       await _cameraController!.initialize();
-      
+
       if (!mounted) return;
-      if (!mounted) return;
-      setState(() {
-        _isCameraReady = true;
-      });
+      setState(() => _isCameraReady = true);
       _connectToWebSocket();
     } catch (e) {
       debugPrint("Erro ao iniciar câmera: $e");
     }
   }
 
-void _connectToWebSocket() {
+  void _connectToWebSocket() {
     try {
-      // ATENÇÃO: Ajuste o IP conforme necessário (10.0.2.2 ou Radmin)
+      // ATENÇÃO: Ajuste o IP conforme necessário
       final wsUrl = Uri.parse('ws://26.72.151.39:8080');
       _channel = WebSocketChannel.connect(wsUrl);
 
       _cameraController!.startImageStream((CameraImage image) {
-        // 1. PROTEÇÃO DE SOBRECARGA (THROTTLING)
-        // Verifica se já passaram 100ms desde o último envio
         final now = DateTime.now();
         if (_lastFrameTime != null && 
             now.difference(_lastFrameTime!).inMilliseconds < 100) {
-          return; // Ignora este frame se for muito cedo
+          return; 
         }
-        _lastFrameTime = now; // Atualiza o tempo do último envio
+        _lastFrameTime = now;
 
-        // 2. PROTEÇÃO DE FLUXO
-        // Evita enviar se já estivermos processando um frame anterior
-        if (_isStreaming) return; 
+        if (_isStreaming) return;
         _isStreaming = true;
-
-        // 3. PREPARAÇÃO E ENVIO DA IMAGEM (Igual ao anterior)
+        
         final plane = image.planes[0];
         final String imageBase64 = base64Encode(plane.bytes);
 
@@ -139,18 +132,13 @@ void _connectToWebSocket() {
         }));
       });
 
-      // 4. ESCUTA DE RESPOSTAS (Igual ao anterior)
       _streamSubscription = _channel?.stream.listen((message) {
         if (!mounted) return;
         final data = json.decode(message);
-
         final String gesture = data['gesto'];
         final double confidence = data['confianca'];
 
-        bool isCurrentlyMatching = false;
-        if (confidence > 0.6 && gesture == _targetGesture) {
-          isCurrentlyMatching = true;
-        }
+        bool isCurrentlyMatching = (confidence > 0.6 && gesture == _targetGesture);
 
         if (isCurrentlyMatching) {
           _firstDetectionTime ??= DateTime.now();
@@ -158,7 +146,7 @@ void _connectToWebSocket() {
           _secondsHeld = duration.inSeconds;
 
           if (_secondsHeld >= _secondsToHold && !_isCorrect) {
-            _isCorrect = true; // VENCEU!
+            _isCorrect = true; 
             _confettiController.play();
           }
         } else {
@@ -172,43 +160,29 @@ void _connectToWebSocket() {
           _detectedGesture = gesture;
           _detectedConfidence = confidence;
         });
-
-        _isStreaming = false; // Libera para o próximo frame
+        _isStreaming = false;
       }, onError: (error) {
-        debugPrint("Erro no WebSocket: $error");
+        debugPrint("Erro WebSocket: $error");
         _isStreaming = false;
-      }, onDone: () {
-        debugPrint("WebSocket desconectado.");
-        _isStreaming = false;
-      });
+      }, onDone: () => _isStreaming = false);
     } catch (e) {
-      debugPrint("Não foi possível conectar ao WebSocket: $e");
+      debugPrint("Erro conexão WS: $e");
     }
   }
 
   Future<void> _saveProgress() async {
     if (!_isCorrect) return;
 
-    setState(() {
-      _isSavingProgress = true;
-    });
+    setState(() { _isSavingProgress = true; });
     final token = await _storage.read(key: 'jwt_token');
 
     if (token == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro: Usuário não autenticado.')),
-      );
-      setState(() {
-        _isSavingProgress = false;
-      });
+      if (mounted) setState(() => _isSavingProgress = false);
       return;
     }
 
     const String apiUrl = 'http://26.72.151.39:3000/progress';
-    final int lessonId = widget.lesson['id'];
-    const int scoreEarned = 10;
-
+    
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -217,269 +191,254 @@ void _connectToWebSocket() {
           'Authorization': 'Bearer $token',
         },
         body: json.encode({
-          'lesson_id': lessonId,
-          'score': scoreEarned,
+          'lesson_id': widget.lesson['id'],
+          'score': 10,
         }),
       ).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
-
       final responseData = json.decode(response.body);
 
+      // --- RESTAURADO: MENSAGENS DE FEEDBACK (SNACKBAR) ---
       if (response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(responseData['message'] ?? 'Progresso salvo!'),
+            content: Text(responseData['message'] ?? 'Progresso salvo! +10 XP'),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
           ),
         );
         Navigator.pop(context, true); 
-        } else if (response.statusCode == 409) {
+      } else if (response.statusCode == 409) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(responseData['message'] ?? 'Lição já concluída.'),
+          const SnackBar(
+            content: Text('Você já concluiu esta lição.'),
             backgroundColor: Colors.orange,
           ),
         );
-        // MUDANÇA AQUI: Também retorna 'true' se já estava completa
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao salvar.')),
+          const SnackBar(
+            content: Text('Erro ao salvar progresso.'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
+      // -----------------------------------------------------
+
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSavingProgress = false;
-        });
-      }
+      if (mounted) setState(() => _isSavingProgress = false);
     }
   }
 
-  Color _getConfidenceColor(double confidence) {
-    if (confidence < 0.4) return Colors.red;
-    if (confidence < 0.7) return Colors.orange;
-    return Colors.green;
+  Color _getStatusColor() {
+    if (_isCorrect) return neonGreen;
+    if (_firstDetectionTime != null) return neonOrange;
+    return Colors.white.withValues(alpha: 0.2);
   }
 
   @override
   Widget build(BuildContext context) {
     final String lessonTitle = widget.lesson['title'] ?? 'Lição';
-    final String description = widget.lesson['description'] ?? '';
+    final Color statusColor = _getStatusColor();
 
     return Scaffold(
-      backgroundColor: darkBG,
-      appBar: AppBar(
-        backgroundColor: darkBG,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: neonGreen),
-        title: Text(
-          lessonTitle,
-          style: const TextStyle(
-            color: neonGreen,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+      // AQUI ESTÁ O DEGRADÊ CORRETO (Igual às outras telas)
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [bgTop,bgBottom], 
           ),
         ),
-      ),
-      body: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  "Pratique o sinal para:",
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 15,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _targetGesture,
-                  style: const TextStyle(
-                    color: neonGreen,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: cardDark,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _isCorrect
-                            ? Colors.green
-                            : (_firstDetectionTime != null
-                                ? Colors.yellow
-                                : Colors.transparent),
-                        width: _isCorrect
-                            ? 4
-                            : (_firstDetectionTime != null ? 3 : 0),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: neonGreen.withValues(alpha: 0.1),
-                          blurRadius: 20,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: _isCameraReady
-                          ? Center(
-                              child: AspectRatio(
-                                aspectRatio:
-                                    _cameraController!.value.aspectRatio,
-                                child: CameraPreview(_cameraController!),
-                              ),
-                            )
-                          : Container(
-                              color: Colors.black12,
-                              alignment: Alignment.center,
-                              child: const CircularProgressIndicator(
-                                color: neonGreen,
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Column(
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_isCorrect)
-                      const Text(
-                        "PARABÉNS! 🎉",
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      )
-                    else if (_firstDetectionTime != null)
-                      Text(
-                        "Segure... ${_secondsHeld + 1}/$_secondsToHold",
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange,
-                        ),
-                      )
-                    else if (_detectedGesture != "Nenhum")
-                      Text(
-                        "Detectado: $_detectedGesture",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    else
-                      Text(
-                        "Aguardando seu sinal...",
-                        style: TextStyle(
-                          color: neonGreen.withValues(alpha: 0.9),
-                          fontSize: 15,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    if (!_isCorrect)
-                      Column(
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: Row(
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: LinearProgressIndicator(
-                              value: _detectedConfidence,
-                              minHeight: 10,
-                              backgroundColor: Colors.grey[800],
-                              color: _getConfidenceColor(_detectedConfidence),
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          Expanded(
+                            child: Text(
+                              lessonTitle,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: neonGreen,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            "${(_detectedConfidence * 100).toInt()}% de certeza",
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 12,
-                            ),
-                          ),
+                          const SizedBox(width: 48),
                         ],
                       ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                _isSavingProgress
-                    ? const Center(
-                        child: CircularProgressIndicator(color: neonGreen),
-                      )
-                    : ElevatedButton.icon(
-                        icon: Icon(
-                          _isCorrect ? Icons.check_circle : Icons.lock,
+                    ),
+
+                    // Meta
+                    Column(
+                      children: [
+                        Text("Faça o sinal para:", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+                        Text(_targetGesture, style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Câmera
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: statusColor,
+                            width: _isCorrect || _firstDetectionTime != null ? 4 : 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: statusColor.withValues(alpha: _isCorrect ? 0.5 : 0.2),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
-                        label: Text(
-                          _isCorrect
-                              ? 'Concluir Lição (+10 XP)'
-                              : 'Acerte o sinal para liberar',
-                        ),
-                        onPressed: _isCorrect ? _saveProgress : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.grey[800],
-                          disabledForegroundColor: Colors.grey[500],
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(fontSize: 18),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: _isCameraReady
+                              ? Center(child: AspectRatio(aspectRatio: _cameraController!.value.aspectRatio, child: CameraPreview(_cameraController!)))
+                              : const Center(child: CircularProgressIndicator(color: neonGreen)),
                         ),
                       ),
-              ],
-            ),
-          ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: SizedBox.expand(
-              child: ConfettiWidget(
-                confettiController: _confettiController,
-                blastDirectionality: BlastDirectionality.explosive,
-                shouldLoop: false,
-                colors: const [
-                  Colors.green,
-                  Colors.blue,
-                  Colors.pink,
-                  Colors.orange,
-                  Colors.purple,
-                  Colors.red
-                ],
-                numberOfParticles: 50,
-                gravity: 0.3,
-                minBlastForce: 10,
-                maxBlastForce: 30,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Feedback (Contador Novo)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: cardDark,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      ),
+                      child: Column(
+                        children: [
+                          if (_isCorrect) ...[
+                            const Icon(Icons.celebration, color: neonGreen, size: 32),
+                            const SizedBox(height: 8),
+                            const Text("PARABÉNS!", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: neonGreen)),
+                          
+                          ] else if (_firstDetectionTime != null) ...[
+                            Text("MANTENHA O SINAL", style: TextStyle(color: neonOrange.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text("${_secondsHeld + 1}", style: const TextStyle(color: neonOrange, fontSize: 46, fontWeight: FontWeight.w900, height: 1)),
+                                const SizedBox(width: 4),
+                                Text("/ ${_secondsToHold}s", style: TextStyle(color: neonOrange.withValues(alpha: 0.6), fontSize: 20, fontWeight: FontWeight.bold, height: 1.2)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: (_secondsHeld + 1) / _secondsToHold,
+                                minHeight: 8,
+                                backgroundColor: neonOrange.withValues(alpha: 0.2),
+                                color: neonOrange,
+                              ),
+                            ),
+
+                          ] else ...[
+                            Text(
+                              _detectedGesture != "Nenhum" ? "Detectado: $_detectedGesture" : "Aguardando sinal...",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: _detectedGesture != "Nenhum" ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value: _detectedConfidence,
+                                minHeight: 8,
+                                backgroundColor: Colors.grey[800],
+                                color: _detectedConfidence > 0.6 ? neonGreen : neonOrange,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Botão
+                    _isSavingProgress
+                        ? const Center(child: CircularProgressIndicator(color: neonGreen))
+                        : SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton.icon(
+                              icon: Icon(
+                                _isCorrect ? Icons.check_circle : Icons.lock,
+                                color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
+                              ),
+                              label: Text(
+                                _isCorrect ? 'CONCLUIR LIÇÃO (+10 XP)' : 'Acerte o sinal para liberar',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5)),
+                              ),
+                              onPressed: _isCorrect ? _saveProgress : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: neonGreen,
+                                disabledBackgroundColor: cardDark,
+                                elevation: _isCorrect ? 4 : 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  side: BorderSide(
+                                    color: _isCorrect ? Colors.transparent : Colors.white.withValues(alpha: 0.1),
+                                  )
+                                ),
+                              ),
+                            ),
+                          ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
-            ),
+              
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _confettiController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  shouldLoop: false,
+                  colors: const [neonGreen, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+                  numberOfParticles: 40,
+                  gravity: 0.2,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

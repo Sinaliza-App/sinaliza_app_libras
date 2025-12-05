@@ -34,12 +34,12 @@ class LessonInstructionScreen extends StatelessWidget {
           children: [
             Text(
               "INSTRUÇÕES DA LIÇÃO",
-              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 25,fontWeight: FontWeight.w800,
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 20,fontWeight: FontWeight.w500,
               letterSpacing: 1.5,),
               textAlign: TextAlign.center,
               
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 15),
             Text(
               title,
               style: const TextStyle(

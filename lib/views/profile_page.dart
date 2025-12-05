@@ -21,7 +21,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Cores do Tema
   static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color neonPurple = Color(0xFF8E5CFF);
   static const Color neonRed = Color(0xFFFF4B4B);
   static const Color neonBlue = Color(0xFF00D1FF);
   
