@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:sinaliza_app_libras/constants.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:confetti/confetti.dart';
 
@@ -107,7 +108,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   void _connectToWebSocket() {
     try {
       // ATENÇÃO: Ajuste o IP conforme necessário
-      final wsUrl = Uri.parse('ws://26.72.151.39:8080');
+      final wsUrl = Uri.parse(wsBaseUrl);
       _channel = WebSocketChannel.connect(wsUrl);
 
       _cameraController!.startImageStream((CameraImage image) {
@@ -181,7 +182,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       return;
     }
 
-    const String apiUrl = 'http://26.72.151.39:3000/progress';
+    const String apiUrl = 'http://192.168.0.6:3000/progress';
     
     try {
       final response = await http.post(
@@ -302,6 +303,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     // Câmera
                     Expanded(
                       child: Container(
+                        width: double.infinity, // Força ocupar largura total
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(24),
@@ -317,15 +319,35 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             ),
                           ],
                         ),
+                        // ClipRRect garante que a imagem não vaze para fora das bordas arredondadas
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(20),
                           child: _isCameraReady
-                              ? Center(child: AspectRatio(aspectRatio: _cameraController!.value.aspectRatio, child: CameraPreview(_cameraController!)))
-                              : const Center(child: CircularProgressIndicator(color: neonGreen)),
+                              ? LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    return SizedBox(
+                                      width: constraints.maxWidth,
+                                      height: constraints.maxHeight,
+                                      child: FittedBox(
+                                        fit: BoxFit.cover, // <--- O SEGREDO: Preenche tudo cortando excessos
+                                        child: SizedBox(
+                                          // Invertemos W e H porque a câmera nativa geralmente entrega a imagem 'deitada'
+                                          width: _cameraController!.value.previewSize!.height,
+                                          height: _cameraController!.value.previewSize!.width,
+                                          child: CameraPreview(_cameraController!),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : const Center(
+                                  child: CircularProgressIndicator(
+                                    color: neonGreen,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
 
                     // Feedback (Contador Novo)
                     Container(

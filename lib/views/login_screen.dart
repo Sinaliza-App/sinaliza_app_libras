@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/views/module_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_screen.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:sinaliza_app_libras/constants.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -35,8 +36,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    const String apiUrl = 'http://26.72.151.39:3000/users/login';
-
+    // 3. Configuração da API
+    final String apiUrl = '$apiBaseUrl/users/login';
     try {
       final response = await http
           .post(

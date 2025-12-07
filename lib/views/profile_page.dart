@@ -7,6 +7,7 @@ import 'dart:convert';
 // Imports do seu projeto
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
+import 'package:sinaliza_app_libras/constants.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -48,8 +49,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     // ATENÇÃO: Ajuste o IP conforme necessário (10.0.2.2 ou Radmin)
-    const String apiUrl = 'http://26.72.151.39:3000/users/me';
-
+    final String apiUrl = '$apiBaseUrl/users/me';
     try {
       final response = await http.get(
         Uri.parse(apiUrl),

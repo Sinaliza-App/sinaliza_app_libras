@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:sinaliza_app_libras/constants.dart';
 // import 'package:sinaliza_app_libras/views/login_screen.dart'; // Se precisar voltar
+
+bool _isEmailValid(String email) {
+    // Regex padrão para e-mail
+    final RegExp regex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+    return regex.hasMatch(email);
+  }
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -68,12 +75,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       return; // Para a execução aqui
     }
+    if (!_isEmailValid(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('E-mail inválido. Verifique se tem @ e .com'), 
+          backgroundColor: Colors.red
+        ),
+      );
+      return; // Para tudo aqui e não envia pro servidor
+    }
 
     setState(() => _isSaving = true);
 
     // 3. Configuração da API
     // ATENÇÃO: Use o IP correto (Radmin ou 10.0.2.2)
-    const String apiUrl = 'http://26.72.151.39:3000/users/register';
+      const String apiUrl = '$apiBaseUrl/users/register';
 
     try {
       final response = await http.post(

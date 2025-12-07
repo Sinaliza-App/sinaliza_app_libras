@@ -80,13 +80,11 @@ class LessonInstructionScreen extends StatelessWidget {
                       ),
                       child: imageUrl != null && imageUrl.isNotEmpty
                           ? ClipOval(
-                              child: Image.network(
+                              child: Image.asset( // <--- MUDANÇA: .asset
                                 imageUrl,
-                                fit: BoxFit.cover,
-                                width: 200,
-                                height: 200,
+                                fit: BoxFit.contain, // Garante que a imagem inteira apareça sem cortar
                                 errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.broken_image, size: 80, color: Colors.white54),
+                                  const Icon(Icons.broken_image, size: 80, color: Colors.white54),
                               ),
                             )
                           : const Icon(Icons.front_hand, size: 80, color: Colors.white54),

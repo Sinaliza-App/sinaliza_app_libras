@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_instruction_screen.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart' as login_screen;
 import 'package:sinaliza_app_libras/views/profile_page.dart';
+import 'package:sinaliza_app_libras/constants.dart';
 
 class CombinedLessonData {
   final List<Map<String, dynamic>> lessons;
@@ -53,7 +54,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
     }
 
     // ATENÇÃO: Ajuste o IP conforme necessário
-    const String baseUrl = 'http://26.72.151.39:3000';
+    const String baseUrl = apiBaseUrl;
     final headers = {'Authorization': 'Bearer $token'};
 
     try {
