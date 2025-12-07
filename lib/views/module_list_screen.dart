@@ -6,6 +6,7 @@ import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/views/ranking_screen.dart';
 
 class ModuleListScreen extends StatefulWidget {
   const ModuleListScreen({super.key});
@@ -26,7 +27,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
 
   // --- CORES DO DEGRADÊ (IDÊNTICAS AO SEU CÓDIGO) ---
   static const Color darkBG = Color(0xFF02040A); // Começo do degradê
-  static const Color darkBG2 = Color(0xFF020915); // Fim do degradê
+  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44); // Fim do degradê
   static const Color cardDark = Color(0xFF07101F);
 
   @override
@@ -116,7 +117,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // ---------------- HEADER ----------------
+              // ---------------- HEADER CORRIGIDO ----------------
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -125,6 +126,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // 1. LADO ESQUERDO: Logo e Nome
                     Row(
                       children: const [
                         Icon(
@@ -144,20 +146,51 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                         ),
                       ],
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.person, color: Colors.white),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (c) => const ProfilePage(),
+
+                    // 2. LADO DIREITO: Ícones Agrupados (Troféu + Perfil)
+                    Row(
+                      children: [
+                        // Botão de Ranking (Troféu)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.emoji_events,
+                              color: Color(0xFFFFD700), // Dourado
+                            ),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RankingScreen(),
+                              ),
+                            ),
+                            tooltip: 'Ranking Global',
                           ),
                         ),
-                      ),
+
+                        const SizedBox(width: 12), // Espaço entre os ícones
+
+                        // Botão de Perfil
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.person, color: Colors.white),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (c) => const ProfilePage(),
+                              ),
+                            ),
+                            tooltip: 'Perfil',
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

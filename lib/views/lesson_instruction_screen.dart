@@ -27,8 +27,17 @@ class LessonInstructionScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
+      body: SafeArea(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [darkBG, const Color.fromARGB(255, 7, 19, 44)],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -141,6 +150,8 @@ class LessonInstructionScreen extends StatelessWidget {
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    ),
       ),
     );
   }

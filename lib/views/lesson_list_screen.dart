@@ -29,7 +29,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
 
   // Paleta Neon e Gradiente
   static const Color darkBG = Color(0xFF02040A); // Começo do degradê
-  static const Color darkBG2 = Color(0xFF020915); // Fim do degradê
+  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44); // Fim do degradê
   static const Color cardDark = Color(0xFF07101F);
   static const Color neonGreen = Color(0xFF00FF9D);
   static const Color neonPurple = Color(0xFF7A5CFF);

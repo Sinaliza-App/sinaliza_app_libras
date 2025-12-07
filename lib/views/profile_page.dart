@@ -27,7 +27,7 @@ class _ProfilePageState extends State<ProfilePage> {
   
   // --- CORES DO DEGRADÊ (IGUAIS À LESSON LIST) ---
   static const Color darkBG = Color(0xFF02040A);   // Topo
-  static const Color darkBG2 = Color(0xFF020915);  // Fundo
+  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44);  // Fundo
   
   static const Color cardDark = Color(0xFF07101F); // Fundo dos cards
 
@@ -48,7 +48,6 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
 
-    // ATENÇÃO: Ajuste o IP conforme necessário (10.0.2.2 ou Radmin)
     final String apiUrl = '$apiBaseUrl/users/me';
     try {
       final response = await http.get(
@@ -60,6 +59,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (response.statusCode == 200) {
         final userData = json.decode(response.body);
+        // Garante que o total_score seja lido corretamente mesmo se vier null ou string
+        if (userData['total_score'] != null) {
+             userData['total_score'] = int.tryParse(userData['total_score'].toString()) ?? 0;
+        }
         Provider.of<UserProvider>(context, listen: false).setUser(userData);
       }
     } catch (e) {
@@ -69,6 +72,116 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  // --- NOVA FUNÇÃO: EDITAR NOME (LÁPIS) ---
+  Future<void> _editName() async {
+    final TextEditingController nameCtrl = TextEditingController();
+    
+    // Mostra o diálogo para digitar
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: cardDark,
+        title: const Text("Alterar Nome", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: nameCtrl,
+          style: const TextStyle(color: Colors.white),
+          cursorColor: neonGreen,
+          decoration: const InputDecoration(
+            labelText: "Novo Nome",
+            labelStyle: TextStyle(color: Colors.grey),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: neonGreen)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: neonBlue)),
+          ),
+        ),
+        actions: [
+          TextButton(
+             onPressed: () => Navigator.pop(context), 
+             child: const Text("Cancelar", style: TextStyle(color: Colors.white54))
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, nameCtrl.text),
+            style: ElevatedButton.styleFrom(backgroundColor: neonGreen, foregroundColor: Colors.black),
+            child: const Text("Salvar"),
+          ),
+        ],
+      ),
+    );
+
+    if (newName == null || newName.trim().isEmpty) return;
+
+    setState(() => _isLoading = true);
+    final token = await _storage.read(key: 'jwt_token');
+
+    try {
+      final response = await http.put(
+        Uri.parse('$apiBaseUrl/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
+        body: json.encode({'name': newName}),
+      );
+
+      if (mounted) {
+        if (response.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nome atualizado!"), backgroundColor: neonGreen));
+          _refreshUserData();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nome já existente."), backgroundColor: Colors.red));
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro edit name: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- NOVA FUNÇÃO: EXCLUIR CONTA (LIXEIRA) ---
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: cardDark,
+        title: const Text("Excluir Conta?", style: TextStyle(color: Colors.white)),
+        content: const Text(
+          "Tem certeza? Todo seu progresso e XP serão perdidos para sempre.",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("EXCLUIR", style: TextStyle(color: neonRed, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    final token = await _storage.read(key: 'jwt_token');
+    
+    try {
+      await http.delete(
+        Uri.parse('$apiBaseUrl/users/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      
+      if (mounted) _logout(context);
+      
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -90,24 +203,22 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
     final user = userProvider.user;
-
+    
     return Scaffold(
-      // REMOVIDO backgroundColor sólido
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        // --- AQUI ESTÁ O DEGRADÊ VERTICAL DE DUAS CORES ---
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [darkBG, darkBG2], // As cores exatas da LessonList
+            colors: [darkBG, darkBG2],
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
-              // --- HEADER PERSONALIZADO (Para substituir a AppBar) ---
+              // --- HEADER PERSONALIZADO ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                 child: Row(
@@ -135,22 +246,25 @@ class _ProfilePageState extends State<ProfilePage> {
                         letterSpacing: 1.5,
                       ),
                     ),
-                      //botão refresh
-                      Container(
+                    
+                    // --- AQUI ESTÁ A LIXEIRA (DELETE) ---
+                    Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: neonRed.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.refresh, color: Colors.white),
-                        onPressed: _refreshUserData,
+                        icon: const Icon(Icons.delete_outline, color: neonRed),
+                        onPressed: _deleteAccount,
+                        tooltip: "Excluir Conta",
                       ),
                     ),
                   ],
                 ),
               ),
+
               // --- CONTEÚDO DA TELA ---
-                Expanded(
+              Expanded(
                 child: _isLoading && user == null
                     ? const Center(child: CircularProgressIndicator(color: neonGreen))
                     : SingleChildScrollView(
@@ -159,7 +273,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           children: [
                             const SizedBox(height: 10),
 
-                            // 1. AVATAR COM BORDA NEON
+                            // 1. AVATAR
                             Container(
                               width: 120,
                               height: 120,
@@ -179,19 +293,29 @@ class _ProfilePageState extends State<ProfilePage> {
 
                             const SizedBox(height: 22),
 
-                            // 2. NOME E EMAIL
-                            // 2. INFORMAÇÕES DO USUÁRIO
-                            Text(
-                              user?.name ?? 'Usuário',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
-                              ),
-                              textAlign: TextAlign.center,
+                            // 2. NOME (COM LÁPIS) E EMAIL
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  user?.name ?? 'Usuário',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                // --- AQUI ESTÁ O LÁPIS (EDITAR) ---
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: neonBlue, size: 20),
+                                  onPressed: _editName,
+                                  tooltip: "Editar Nome",
+                                )
+                              ],
                             ),
-                            const SizedBox(height: 6),
+                            
+                            const SizedBox(height: 0),
                             Text(
                               user?.email ?? 'email@exemplo.com',
                               style: TextStyle(
@@ -267,8 +391,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 40),
+
                             // 4. BOTÃO DE LOGOUT
                             InkWell(
                               onTap: () => _logout(context),

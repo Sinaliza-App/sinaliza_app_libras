@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/views/module_list_screen.dart';
+import 'package:sinaliza_app_libras/views/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -36,38 +36,53 @@ class _SplashScreenState extends State<SplashScreen> {
         MaterialPageRoute(builder: (context) => const ModuleListScreen()),
       );
     } else {
-      // NÃO TEM TOKEN -> Vai para Login
+      // MUDANÇA: Se não tá logado, manda pro Onboarding em vez do Login direto
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()), 
+        // Lembre de importar o arquivo onboarding_screen.dart no topo
       );
     }
   }
-
   @override
   Widget build(BuildContext context) {
     // Sua tela bonita com logo e loading neon
     return Scaffold(
       backgroundColor: const Color(0xFF02040A),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Se tiver uma logo, coloque aqui. Se não, use o ícone/texto:
-            const Icon(Icons.waving_hand_outlined, size: 80, color: Color(0xFF00FF9D)),
-            const SizedBox(height: 20),
-            const Text(
-              "SINALIZA",
-              style: TextStyle(
-                color: Color(0xFF00FF9D),
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF02040A), Color.fromARGB(255, 7, 19, 44)],
             ),
-            const SizedBox(height: 40),
-            const CircularProgressIndicator(color: Color(0xFF00FF9D)),
-          ],
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Se tiver uma logo, coloque aqui. Se não, use o ícone/texto:
+                const Icon(
+                  Icons.waving_hand_outlined,
+                  size: 80,
+                  color: Color(0xFF00FF9D),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "SINALIZA",
+                  style: TextStyle(
+                    color: Color(0xFF00FF9D),
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                const CircularProgressIndicator(color: Color(0xFF00FF9D)),
+              ],
+            ),
+          ),
         ),
       ),
     );

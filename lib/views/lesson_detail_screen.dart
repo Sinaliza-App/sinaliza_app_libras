@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:confetti/confetti.dart';
+import 'package:audioplayers/audioplayers.dart'; // Para Sons
+import 'package:vibration/vibration.dart';
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic> lesson;
@@ -21,11 +23,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   // --- PALETA DE CORES NEON ---
   static const Color neonGreen = Color(0xFF00FF9D);
   static const Color neonOrange = Color(0xFFFF9900);
-  
+
   // --- CORES DO DEGRADÊ DE FUNDO (IGUAIS ÀS OUTRAS TELAS) ---
-  static const Color bgTop = Color(0xFF02040A);      // Preto (Topo)
-  static const Color bgBottom = Color(0xFF020915);   // Azul Escuro (Fundo)
-  static const Color cardDark = Color(0xFF0A1223);   // Fundo dos painéis
+  static const Color bgTop = Color(0xFF02040A); // Preto (Topo)
+  static const Color bgBottom = Color.fromARGB(
+    255,
+    7,
+    19,
+    44,
+  ); // Azul Escuro (Fundo)
+  static const Color cardDark = Color(0xFF0A1223); // Fundo dos painéis
 
   // --- CÂMERA ---
   CameraController? _cameraController;
@@ -52,13 +59,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   bool _isSavingProgress = false;
   final _storage = const FlutterSecureStorage();
   late ConfettiController _confettiController;
+  final AudioPlayer _audioPlayer = AudioPlayer(); // Player de som
 
   @override
   void initState() {
     super.initState();
     _extractTargetGesture();
     _initializeCamera();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
   }
 
   void _extractTargetGesture() {
@@ -90,7 +100,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       _cameraController = CameraController(
         selectedCamera,
-        ResolutionPreset.low, 
+        ResolutionPreset.low,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
@@ -113,68 +123,109 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       _cameraController!.startImageStream((CameraImage image) {
         final now = DateTime.now();
-        if (_lastFrameTime != null && 
+        if (_lastFrameTime != null &&
             now.difference(_lastFrameTime!).inMilliseconds < 100) {
-          return; 
+          return;
         }
         _lastFrameTime = now;
 
         if (_isStreaming) return;
         _isStreaming = true;
-        
+
         final plane = image.planes[0];
         final String imageBase64 = base64Encode(plane.bytes);
 
-        _channel?.sink.add(jsonEncode({
-          'image': imageBase64,
-          'height': image.height,
-          'width': image.width,
-          'stride': plane.bytesPerRow,
-        }));
+        _channel?.sink.add(
+          jsonEncode({
+            'image': imageBase64,
+            'height': image.height,
+            'width': image.width,
+            'stride': plane.bytesPerRow,
+          }),
+        );
       });
 
-      _streamSubscription = _channel?.stream.listen((message) {
-        if (!mounted) return;
-        final data = json.decode(message);
-        final String gesture = data['gesto'];
-        final double confidence = data['confianca'];
+      _streamSubscription = _channel?.stream.listen(
+        (message) async {
+          if (!mounted) return;
+          final data = json.decode(message);
+          final String gesture = data['gesto'];
+          final double confidence = data['confianca'];
 
-        bool isCurrentlyMatching = (confidence > 0.6 && gesture == _targetGesture);
+          bool isCurrentlyMatching =
+              (confidence > 0.6 && gesture == _targetGesture);
 
-        if (isCurrentlyMatching) {
-          _firstDetectionTime ??= DateTime.now();
-          final duration = DateTime.now().difference(_firstDetectionTime!);
-          _secondsHeld = duration.inSeconds;
+          if (isCurrentlyMatching) {
+            _firstDetectionTime ??= DateTime.now();
+            final duration = DateTime.now().difference(_firstDetectionTime!);
+            _secondsHeld = duration.inSeconds;
+            // Verifica se mudou o segundo (para vibrar levemente a cada "tic")
+            if (duration.inSeconds > _secondsHeld) {
+              if (await Vibration.hasVibrator() ?? false) {
+                Vibration.vibrate(duration: 50); // Vibração leve
+                debugPrint("📳 Tic de vibração leve");
+              }
+            }
+            _secondsHeld = duration.inSeconds;
 
-          if (_secondsHeld >= _secondsToHold && !_isCorrect) {
-            _isCorrect = true; 
-            _confettiController.play();
+            if (_secondsHeld >= _secondsToHold && !_isCorrect) {
+              _isCorrect = true;
+              _confettiController.play();
+              _onSuccess();
+            }
+          } else {
+            if (!_isCorrect) {
+              _firstDetectionTime = null;
+              _secondsHeld = 0;
+            }
           }
-        } else {
-          if (!_isCorrect) {
-            _firstDetectionTime = null;
-            _secondsHeld = 0;
-          }
-        }
 
-        setState(() {
-          _detectedGesture = gesture;
-          _detectedConfidence = confidence;
-        });
-        _isStreaming = false;
-      }, onError: (error) {
-        debugPrint("Erro WebSocket: $error");
-        _isStreaming = false;
-      }, onDone: () => _isStreaming = false);
+          setState(() {
+            _detectedGesture = gesture;
+            _detectedConfidence = confidence;
+          });
+          _isStreaming = false;
+        },
+        onError: (error) {
+          debugPrint("Erro WebSocket: $error");
+          _isStreaming = false;
+        },
+        onDone: () => _isStreaming = false,
+      );
     } catch (e) {
       debugPrint("Erro conexão WS: $e");
+    }
+  }
+
+  void _onSuccess() async {
+  setState(() {
+    _isCorrect = true;
+  });
+
+  // 1. Confetes
+  _confettiController.play();
+
+  // 2. VIBRAÇÃO FORTE (Novo Código)
+  // Verifica se o celular tem motor de vibração
+  if (await Vibration.hasVibrator() ?? false) {
+      Vibration.vibrate(duration: 500); // Vibra por meio segundo
+      debugPrint("📳 Vibrando agora!");
+  }
+    try {
+      // Certifique-se de ter o arquivo assets/sounds/success.mp3
+      // Se não tiver, comente a linha abaixo para não dar erro
+      await _audioPlayer.play(AssetSource('sounds/success.mp3'));
+    } catch (e) {
+      debugPrint("Erro ao tocar som: $e");
     }
   }
 
   Future<void> _saveProgress() async {
     if (!_isCorrect) return;
 
-    setState(() { _isSavingProgress = true; });
+    setState(() {
+      _isSavingProgress = true;
+    });
     final token = await _storage.read(key: 'jwt_token');
 
     if (token == null) {
@@ -182,20 +233,19 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       return;
     }
 
-    const String apiUrl = 'http://192.168.0.6:3000/progress';
-    
+    const String apiUrl = '$apiBaseUrl/progress';
+
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json; charset=UTF-8',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode({
-          'lesson_id': widget.lesson['id'],
-          'score': 10,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse(apiUrl),
+            headers: {
+              'Content-Type': 'application/json; charset=UTF-8',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode({'lesson_id': widget.lesson['id'], 'score': 10}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
       final responseData = json.decode(response.body);
@@ -209,7 +259,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             duration: const Duration(seconds: 2),
           ),
         );
-        Navigator.pop(context, true); 
+        Navigator.pop(context, true);
       } else if (response.statusCode == 409) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -227,9 +277,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         );
       }
       // -----------------------------------------------------
-
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro: $e')));
     } finally {
       if (mounted) setState(() => _isSavingProgress = false);
     }
@@ -255,7 +306,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [bgTop,bgBottom], 
+            colors: [bgTop, bgBottom],
           ),
         ),
         child: SafeArea(
@@ -272,7 +323,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       child: Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+                            icon: const Icon(
+                              Icons.arrow_back_ios_new,
+                              color: Colors.white,
+                            ),
                             onPressed: () => Navigator.pop(context),
                           ),
                           Expanded(
@@ -294,8 +348,21 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     // Meta
                     Column(
                       children: [
-                        Text("Faça o sinal para:", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
-                        Text(_targetGesture, style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900)),
+                        Text(
+                          "Faça o sinal para:",
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          _targetGesture,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -309,11 +376,15 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: statusColor,
-                            width: _isCorrect || _firstDetectionTime != null ? 4 : 2,
+                            width: _isCorrect || _firstDetectionTime != null
+                                ? 4
+                                : 2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: statusColor.withValues(alpha: _isCorrect ? 0.5 : 0.2),
+                              color: statusColor.withValues(
+                                alpha: _isCorrect ? 0.5 : 0.2,
+                              ),
                               blurRadius: 20,
                               spreadRadius: 2,
                             ),
@@ -329,12 +400,21 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                       width: constraints.maxWidth,
                                       height: constraints.maxHeight,
                                       child: FittedBox(
-                                        fit: BoxFit.cover, // <--- O SEGREDO: Preenche tudo cortando excessos
+                                        fit: BoxFit
+                                            .cover, // <--- O SEGREDO: Preenche tudo cortando excessos
                                         child: SizedBox(
                                           // Invertemos W e H porque a câmera nativa geralmente entrega a imagem 'deitada'
-                                          width: _cameraController!.value.previewSize!.height,
-                                          height: _cameraController!.value.previewSize!.width,
-                                          child: CameraPreview(_cameraController!),
+                                          width: _cameraController!
+                                              .value
+                                              .previewSize!
+                                              .height,
+                                          height: _cameraController!
+                                              .value
+                                              .previewSize!
+                                              .width,
+                                          child: CameraPreview(
+                                            _cameraController!,
+                                          ),
                                         ),
                                       ),
                                     );
@@ -351,29 +431,68 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
                     // Feedback (Contador Novo)
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 20,
+                      ),
                       decoration: BoxDecoration(
                         color: cardDark,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05),
+                        ),
                       ),
                       child: Column(
                         children: [
                           if (_isCorrect) ...[
-                            const Icon(Icons.celebration, color: neonGreen, size: 32),
+                            const Icon(
+                              Icons.celebration,
+                              color: neonGreen,
+                              size: 32,
+                            ),
                             const SizedBox(height: 8),
-                            const Text("PARABÉNS!", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: neonGreen)),
-                          
+                            const Text(
+                              "PARABÉNS!",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: neonGreen,
+                              ),
+                            ),
                           ] else if (_firstDetectionTime != null) ...[
-                            Text("MANTENHA O SINAL", style: TextStyle(color: neonOrange.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                            Text(
+                              "MANTENHA O SINAL",
+                              style: TextStyle(
+                                color: neonOrange.withValues(alpha: 0.8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
                             const SizedBox(height: 4),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text("${_secondsHeld + 1}", style: const TextStyle(color: neonOrange, fontSize: 46, fontWeight: FontWeight.w900, height: 1)),
+                                Text(
+                                  "${_secondsHeld + 1}",
+                                  style: const TextStyle(
+                                    color: neonOrange,
+                                    fontSize: 46,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1,
+                                  ),
+                                ),
                                 const SizedBox(width: 4),
-                                Text("/ ${_secondsToHold}s", style: TextStyle(color: neonOrange.withValues(alpha: 0.6), fontSize: 20, fontWeight: FontWeight.bold, height: 1.2)),
+                                Text(
+                                  "/ ${_secondsToHold}s",
+                                  style: TextStyle(
+                                    color: neonOrange.withValues(alpha: 0.6),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.2,
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -382,18 +501,23 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               child: LinearProgressIndicator(
                                 value: (_secondsHeld + 1) / _secondsToHold,
                                 minHeight: 8,
-                                backgroundColor: neonOrange.withValues(alpha: 0.2),
+                                backgroundColor: neonOrange.withValues(
+                                  alpha: 0.2,
+                                ),
                                 color: neonOrange,
                               ),
                             ),
-
                           ] else ...[
                             Text(
-                              _detectedGesture != "Nenhum" ? "Detectado: $_detectedGesture" : "Aguardando sinal...",
+                              _detectedGesture != "Nenhum"
+                                  ? "Detectado: $_detectedGesture"
+                                  : "Aguardando sinal...",
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: _detectedGesture != "Nenhum" ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                                color: _detectedGesture != "Nenhum"
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.4),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -403,7 +527,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 value: _detectedConfidence,
                                 minHeight: 8,
                                 backgroundColor: Colors.grey[800],
-                                color: _detectedConfidence > 0.6 ? neonGreen : neonOrange,
+                                color: _detectedConfidence > 0.6
+                                    ? neonGreen
+                                    : neonOrange,
                               ),
                             ),
                           ],
@@ -415,18 +541,30 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
                     // Botão
                     _isSavingProgress
-                        ? const Center(child: CircularProgressIndicator(color: neonGreen))
+                        ? const Center(
+                            child: CircularProgressIndicator(color: neonGreen),
+                          )
                         : SizedBox(
                             width: double.infinity,
                             height: 56,
                             child: ElevatedButton.icon(
                               icon: Icon(
                                 _isCorrect ? Icons.check_circle : Icons.lock,
-                                color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
+                                color: _isCorrect
+                                    ? Colors.black
+                                    : Colors.white.withValues(alpha: 0.5),
                               ),
                               label: Text(
-                                _isCorrect ? 'CONCLUIR LIÇÃO (+10 XP)' : 'Acerte o sinal para liberar',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5)),
+                                _isCorrect
+                                    ? 'CONCLUIR LIÇÃO (+10 XP)'
+                                    : 'Acerte o sinal para liberar',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isCorrect
+                                      ? Colors.black
+                                      : Colors.white.withValues(alpha: 0.5),
+                                ),
                               ),
                               onPressed: _isCorrect ? _saveProgress : null,
                               style: ElevatedButton.styleFrom(
@@ -436,8 +574,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
-                                    color: _isCorrect ? Colors.transparent : Colors.white.withValues(alpha: 0.1),
-                                  )
+                                    color: _isCorrect
+                                        ? Colors.transparent
+                                        : Colors.white.withValues(alpha: 0.1),
+                                  ),
                                 ),
                               ),
                             ),
@@ -446,14 +586,20 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                   ],
                 ),
               ),
-              
+
               Align(
                 alignment: Alignment.topCenter,
                 child: ConfettiWidget(
                   confettiController: _confettiController,
                   blastDirectionality: BlastDirectionality.explosive,
                   shouldLoop: false,
-                  colors: const [neonGreen, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+                  colors: const [
+                    neonGreen,
+                    Colors.blue,
+                    Colors.pink,
+                    Colors.orange,
+                    Colors.purple,
+                  ],
                   numberOfParticles: 40,
                   gravity: 0.2,
                 ),

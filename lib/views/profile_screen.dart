@@ -143,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     const Color neonGreen = Color(0xFF00FF9D);
     const Color darkBackground = Color(0xFF02040A);
-    const Color cardDark = Color(0xFF020915);
+    const Color cardDark = Color.fromARGB(255, 1, 6, 14);
     const Color inputDark = Color(0xFF07101F);
 
     return Scaffold(
@@ -154,7 +154,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF02040A), Color(0xFF020915)],
+              colors: [Color(0xFF02040A), Color.fromARGB(255, 7, 19, 44)],
             ),
           ),
           child: Center(

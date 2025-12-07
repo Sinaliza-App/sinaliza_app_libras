@@ -30,6 +30,9 @@ dependencies:
   permission_handler: ^12.0.1
   web_socket_channel: ^3.0.3
   confetti: ^0.8.0
+  audioplayers: ^6.5.1
+  vibration: ^3.1.4
+  smooth_page_indicator: ^2.0.1
 
 dev_dependencies:
   flutter_test:
@@ -66,4 +69,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/       # (Para a logo, se tiver)
-    - assets/tutorials/    # (Para as lições)
+    - assets/tutorials/
+    - assets/sounds/    # (Para as lições)
