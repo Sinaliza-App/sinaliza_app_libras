@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
-import 'package:sinaliza_app_libras/views/login_screen.dart';
-import 'package:http/http.dart' as http; // 1. Importe o http
-import 'dart:convert'; // 2. Importe o dart:convert
+import 'package:sinaliza_app_libras/views/module_list_screen.dart';
+import 'package:sinaliza_app_libras/views/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -18,82 +16,74 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Inicia a verificação assim que a tela é construída
-    _checkAuthStatus();
+    _checkLoginStatus();
   }
 
-  Future<void> _checkAuthStatus() async {
-    // Adiciona um pequeno delay (opcional, mas bom para UI)
-    await Future.delayed(const Duration(seconds: 1));
+  Future<void> _checkLoginStatus() async {
+    // 1. Espera um pouquinho (2 segundos) para mostrar a logo bonita
+    await Future.delayed(const Duration(seconds: 2));
 
-    // 1. Tenta ler o token do storage
-    final String? token = await _storage.read(key: 'jwt_token');
+    if (!mounted) return;
 
-    if (token == null) {
-      // Se não existe token, vá para a tela de Login
-      if (!mounted) return;
+    // 2. Tenta ler o token salvo
+    String? token = await _storage.read(key: 'jwt_token');
+
+    // 3. Decisão:
+    if (token != null && token.isNotEmpty) {
+      // TEM TOKEN -> Vai direto para a Home (Módulos)
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const ModuleListScreen()),
       );
-      return;
-    }
-
-    // 2. Se o token EXISTE, vamos VALIDÁ-LO com a API
-    // ATENÇÃO: Use '10.0.2.2' se estiver no Emulador Android
-    const String apiUrl = 'http://10.0.2.2:3000/users/me';
-    // Se estiver no app Desktop (Windows), pode usar 'localhost':
-    // const String apiUrl = 'http://localhost:3000/users/me';
-
-    try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {
-          // 3. Enviamos o "crachá" (token) no cabeçalho
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        // --- SUCESSO (200) ---
-        // O token é válido. O backend nos enviou os dados do usuário.
-        // TODO: Salvar os dados do usuário (json.decode(response.body)) em um
-        // gerenciador de estado (Provider, Riverpod, etc.)
-        
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LessonListScreen()),
-        );
-      } else {
-        // --- FALHA (401, 400) ---
-        // O token é inválido ou expirou.
-        // Apagamos o token "podre" do celular.
-        await _storage.delete(key: 'jwt_token');
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    } catch (e) {
-      // 4. Erro de rede (sem internet, API desligada)
-      // Não podemos validar, então mandamos para o Login por segurança.
-      if (!mounted) return;
-      await _storage.delete(key: 'jwt_token'); // Limpa o token por via das dúvidas
+    } else {
+      // MUDANÇA: Se não tá logado, manda pro Onboarding em vez do Login direto
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()), 
+        // Lembre de importar o arquivo onboarding_screen.dart no topo
       );
     }
   }
-
   @override
   Widget build(BuildContext context) {
-    // Uma tela de loading simples
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
+    // Sua tela bonita com logo e loading neon
+    return Scaffold(
+      backgroundColor: const Color(0xFF02040A),
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF02040A), Color.fromARGB(255, 7, 19, 44)],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Se tiver uma logo, coloque aqui. Se não, use o ícone/texto:
+                const Icon(
+                  Icons.waving_hand_outlined,
+                  size: 80,
+                  color: Color(0xFF00FF9D),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "SINALIZA",
+                  style: TextStyle(
+                    color: Color(0xFF00FF9D),
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                const CircularProgressIndicator(color: Color(0xFF00FF9D)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

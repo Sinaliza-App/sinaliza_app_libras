@@ -2,11 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sinaliza_app_libras/views/lesson_detail_screen.dart'; // Para a navegação
-import 'package:sinaliza_app_libras/views/login_screen.dart'; // Para fazer logout em caso de erro
+import 'package:sinaliza_app_libras/views/lesson_instruction_screen.dart';
+import 'package:sinaliza_app_libras/views/login_screen.dart' as login_screen;
+import 'package:sinaliza_app_libras/views/profile_page.dart';
+import 'package:sinaliza_app_libras/constants.dart';
+
+class CombinedLessonData {
+  final List<Map<String, dynamic>> lessons;
+  final Set<int> completedLessonIds;
+  CombinedLessonData({required this.lessons, required this.completedLessonIds});
+}
 
 class LessonListScreen extends StatefulWidget {
-  const LessonListScreen({super.key});
+  final int? moduleId;
+  final String? moduleTitle;
+
+  const LessonListScreen({super.key, this.moduleId, this.moduleTitle});
 
   @override
   State<LessonListScreen> createState() => _LessonListScreenState();
@@ -14,136 +25,318 @@ class LessonListScreen extends StatefulWidget {
 
 class _LessonListScreenState extends State<LessonListScreen> {
   final _storage = const FlutterSecureStorage();
-  late Future<List<Map<String, dynamic>>> _lessonsFuture;
+  late Future<CombinedLessonData> _dataFuture;
+
+  // Paleta Neon e Gradiente
+  static const Color darkBG = Color(0xFF02040A);
+  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44);
+  static const Color cardDark = Color(0xFF07101F);
+  static const Color neonGreen = Color(0xFF00FF9D);
+  static const Color neonPurple = Color(0xFF7A5CFF);
+  static const Color neonBlue = Color(0xFF00D1FF);
+  static const Color neonOrange = Color(0xFFFF9900);
 
   @override
   void initState() {
     super.initState();
-    // Inicia a busca pelas lições assim que a tela é criada
-    _lessonsFuture = _fetchLessons();
+    _dataFuture = _fetchLessonsAndProgress();
   }
 
-  // --- NOVA FUNÇÃO PARA BUSCAR LIÇÕES DA API ---
-  Future<List<Map<String, dynamic>>> _fetchLessons() async {
-    // 1. Ler o token salvo
-    final token = await _storage.read(key: 'jwt_token');
+  void _refreshData() {
+    setState(() {
+      _dataFuture = _fetchLessonsAndProgress();
+    });
+  }
 
-    // Se não tiver token, algo está errado (tecnicamente, a SplashScreen já deveria ter pego isso)
+  Future<CombinedLessonData> _fetchLessonsAndProgress() async {
+    final token = await _storage.read(key: 'jwt_token');
     if (token == null) {
       _logout();
       throw Exception('Token não encontrado. Fazendo logout.');
     }
 
-    // ATENÇÃO: Use '10.0.2.2' se estiver no Emulador Android
-    const String apiUrl = 'http://10.0.2.2:3000/lessons';
-    // Se estiver no app Desktop (Windows), pode usar 'localhost':
-    // const String apiUrl = 'http://localhost:3000/lessons';
+    const String baseUrl = apiBaseUrl;
+    final headers = {'Authorization': 'Bearer $token'};
 
     try {
-      final response = await http
-          .get(
-            Uri.parse(apiUrl),
-            headers: {
-              // 2. Enviar o "crachá" (JWT) no cabeçalho
-              'Authorization': 'Bearer $token',
-            },
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        // --- SUCESSO ---
-        // Converte a resposta JSON (que é uma lista) em uma List<Map<String, dynamic>>
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<Map<String, dynamic>>();
-      } else if (response.statusCode == 401 || response.statusCode == 400) {
-        // --- FALHA NA AUTENTICAÇÃO ---
-        // Token inválido ou expirado. Faça o logout.
-        _logout();
-        throw Exception('Sessão expirada. Por favor, faça o login novamente.');
-      } else {
-        // --- OUTROS ERROS DE SERVIDOR ---
-        throw Exception('Erro ao carregar lições: ${response.statusCode}');
+      String lessonsUrl = '$baseUrl/lessons';
+      if (widget.moduleId != null) {
+        lessonsUrl += '?module_id=${widget.moduleId}';
       }
+
+      final responses = await Future.wait([
+        http.get(Uri.parse(lessonsUrl), headers: headers),
+        http.get(Uri.parse('$baseUrl/progress'), headers: headers),
+      ]);
+
+      if (responses[0].statusCode != 200) throw Exception('Erro ao carregar lições');
+      if (responses[1].statusCode != 200) throw Exception('Erro ao carregar progresso');
+
+      final lessons = (json.decode(responses[0].body) as List).cast<Map<String, dynamic>>();
+      final progress = json.decode(responses[1].body);
+
+      final completedIds = progress
+          .map<int>((p) => p['lesson_id'] as int)
+          .toSet();
+
+      return CombinedLessonData(
+        lessons: lessons,
+        completedLessonIds: completedIds,
+      );
     } catch (e) {
-      // Erro de rede (timeout, API desligada)
-      // (Opcional: em um app real, aqui você tentaria ler do cache SQLite)
       throw Exception('Erro de conexão: $e');
     }
   }
 
-  // Função de utilidade para deslogar o usuário e levá-lo ao Login
   void _logout() async {
     await _storage.delete(key: 'jwt_token');
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-      (route) => false, // Remove todas as telas anteriores
+      MaterialPageRoute(builder: (context) => const login_screen.LoginScreen()),
+      (route) => false,
     );
+  }
+
+  // Lógica visual para combinar com a tela anterior
+  Color _getModuleColor() {
+    // Usa o ID para manter a cor consistente com a lista de módulos
+    final colors = [neonGreen, const Color.fromARGB(255, 99, 65, 255), neonBlue, neonOrange];
+    int index = (widget.moduleId ?? 1) - 1; 
+    if (index < 0) index = 0;
+    return colors[index % colors.length];
+  }
+
+  IconData _getModuleIcon() {
+    // Tenta adivinhar o ícone pelo título já que não recebemos o icon_name aqui
+    final title = (widget.moduleTitle ?? "").toLowerCase();
+    if (title.contains('alfabeto')) return Icons.sort_by_alpha;
+    if (title.contains('número') || title.contains('numero')) return Icons.filter_1;
+    if (title.contains('sauda')) return Icons.waving_hand;
+    return Icons.class_outlined;
   }
 
   @override
   Widget build(BuildContext context) {
+    final moduleColor = _getModuleColor();
+    final moduleIcon = _getModuleIcon();
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lições de Libras'),
-        // TODO: Adicionar um botão de "Perfil" ou "Sair" aqui
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Sair',
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [darkBG, darkBG2],
           ),
-        ],
-      ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _lessonsFuture, // O Future que o builder vai "ouvir"
-        builder: (context, snapshot) {
-          // 1. Enquanto os dados estão carregando, mostre um spinner.
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          // 2. Se ocorreu um erro na busca.
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Erro ao carregar as lições.\n${snapshot.error}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ---------------- HEADER CUSTOMIZADO ----------------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Botão Voltar
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                    
+                    // Botão de Perfil
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.person, color: Colors.white),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ProfilePage()),
+                        ),
+                        tooltip: 'Perfil',
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            );
-          }
-          // 3. Se os dados foram carregados com sucesso, mas a lista está vazia.
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Nenhuma lição encontrada.'));
-          }
-
-          // 4. Se tudo deu certo, construa a lista.
-          final lessons = snapshot.data!;
-          return ListView.builder(
-            itemCount: lessons.length,
-            itemBuilder: (context, index) {
-              final lesson = lessons[index];
-              return ListTile(
-                leading: const Icon(Icons.sign_language),
-                title: Text(lesson['title']),
-                subtitle: Text(lesson['description']),
-                onTap: () {
-                  // Navega para a tela de detalhes (código que você já tinha)
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LessonDetailScreen(lesson: lesson),
+              
+              // --- HERO ANIMATION (A MÁGICA ACONTECE AQUI) ---
+              // Este ícone vai "voar" da tela anterior para cá
+              if (widget.moduleId != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Hero(
+                    tag: 'module_icon_${widget.moduleId}', // MESMA TAG DA TELA ANTERIOR
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: moduleColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: moduleColor.withValues(alpha: 0.2),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          )
+                        ]
+                      ),
+                      child: Icon(
+                        moduleIcon,
+                        size: 40,
+                        color: moduleColor,
+                      ),
                     ),
-                  );
-                },
-              );
-            },
-          );
-        },
+                  ),
+                ),
+              // ------------------------------------------------
+
+              // Título do Módulo
+              if (widget.moduleTitle != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Text(
+                    widget.moduleTitle!.toUpperCase(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                      shadows: [
+                        Shadow(color: moduleColor.withValues(alpha: 0.5), blurRadius: 10)
+                      ]
+                    ),
+                  ),
+                ),
+
+              // ---------------- LISTA DE LIÇÕES ----------------
+              Expanded(
+                child: FutureBuilder<CombinedLessonData>(
+                  future: _dataFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: neonGreen),
+                      );
+                    }
+
+                    if (!snapshot.hasData) {
+                      return const Center(
+                        child: Text(
+                          'Nenhuma lição encontrada.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      );
+                    }
+
+                    final lessons = snapshot.data!.lessons;
+                    final completed = snapshot.data!.completedLessonIds;
+                    
+                    if (lessons.isEmpty) {
+                       return const Center(
+                        child: Text(
+                          'Nenhuma lição neste módulo.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      itemCount: lessons.length,
+                      itemBuilder: (context, index) {
+                        final lesson = lessons[index];
+                        final bool isDone = completed.contains(lesson["id"]);
+
+                        return GestureDetector(
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => LessonInstructionScreen(lesson: lesson),
+                              ),
+                            );
+                            if (mounted) _refreshData();
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 18),
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: cardDark,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: isDone ? neonGreen : neonPurple.withValues(alpha: 0.3),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (isDone ? neonGreen : neonPurple).withValues(alpha: 0.1),
+                                  blurRadius: 12,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isDone ? Icons.star : Icons.front_hand,
+                                  color: isDone ? neonGreen : neonPurple,
+                                  size: 32,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        lesson["title"],
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        lesson["description"] ?? "Toque para começar",
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.6),
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _refreshData,
+        backgroundColor: neonGreen,
+        foregroundColor: darkBG,
+        child: const Icon(Icons.refresh),
       ),
     );
   }

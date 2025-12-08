@@ -14,6 +14,7 @@ dependencies:
   sqflite: ^2.4.2
   sqflite_common_ffi: ^2.3.6
   path_provider: ^2.1.5
+  provider: ^6.1.2
   path: ^1.9.0
   crypto: ^3.0.3
   
@@ -25,14 +26,48 @@ dependencies:
 
   flutter_dotenv: ^5.0.2
   flutter_secure_storage: ^9.2.4
+  camera: ^0.11.3
+  permission_handler: ^12.0.1
+  web_socket_channel: ^3.0.3
+  confetti: ^0.8.0
+  audioplayers: ^6.5.1
+  vibration: ^3.1.4
+  smooth_page_indicator: ^2.0.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.1
 
 
   flutter_lints: ^5.0.0
 
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  min_sdk_android: 21 # Importante para manter compatibilidade
+  adaptive_icon_background: "#000000" # Fundo preto para combinar com sua logo
+  adaptive_icon_foreground: "assets/images/app_icon.png"
+
+# Configuração da TELA DE SPLASH NATIVA
+flutter_native_splash:
+  color: "#02040A"        # Cor para modo claro
+  color_dark: "#02040A"   # Cor para modo escuro (Adicione esta linha!)
+  image: "assets/images/app_icon.png"
+  fullscreen: true
+  android: true
+  ios: true
+  android_12:             # Configuração específica para Android 12+
+    color: "#02040A"      # Cor de fundo
+    color_dark: "#02040A" # Cor de fundo no modo escuro
+    image: "assets/images/app_icon.png"
 flutter:
 
   uses-material-design: true
+  assets:
+    - assets/images/       # (Para a logo, se tiver)
+    - assets/tutorials/
+    - assets/sounds/    # (Para as lições)

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:sinaliza_app_libras/views/lesson_list_screen.dart'; // Para onde iremos após o login
-import 'package:sinaliza_app_libras/views/profile_screen.dart'; // Para o usuário poder se cadastrar
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // 1. IMPORTADO
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/views/module_list_screen.dart';
+import 'package:sinaliza_app_libras/views/profile_screen.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:sinaliza_app_libras/constants.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,12 +19,11 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  // 2. CRIADA A INSTÂNCIA DO STORAGE
   final _storage = const FlutterSecureStorage();
 
   Future<void> _loginUser() async {
-    final email = _emailController.text;
-    final password = _passwordController.text;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -34,53 +36,64 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // ATENÇÃO: Use '10.0.2.2' se estiver no Emulador Android
-    const String apiUrl = 'http://10.0.2.2:3000/users/login';
-    // Se estiver no app Desktop (Windows), pode usar 'localhost':
-    // const String apiUrl = 'http://localhost:3000/users/login';
-
+    // 3. Configuração da API
+    final String apiUrl = '$apiBaseUrl/users/login';
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: json.encode({
-          'email': email,
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse(apiUrl),
+            headers: {'Content-Type': 'application/json; charset=UTF-8'},
+            body: json.encode({'email': email, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
       final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        // --- SUCESSO! MODIFICAÇÃO AQUI ---
-        
-        // 3. Pegue o token da resposta
         final String token = responseData['token'];
-        
+        final Map<String, dynamic> userData = responseData['user'];
+
+        // ---------------------------------------------
+        // 🔥 SALVANDO DADOS DO USUÁRIO NO STORAGE
+        // ---------------------------------------------
+        await _storage.write(key: 'jwt_token', value: token);
+        await _storage.write(key: 'user_name', value: userData['name']);
+        await _storage.write(key: 'user_email', value: userData['email']);
+        // ---------------------------------------------
+
+        Provider.of<UserProvider>(context, listen: false).setUser(userData);
+
         // 4. Salve o token com segurança no dispositivo
         await _storage.write(key: 'jwt_token', value: token);
+        Provider.of<UserProvider>(context, listen: false).setUser(userData);
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'Login bem-sucedido!')),
+          SnackBar(
+            content: Text(responseData['message'] ?? 'Login bem-sucedido!'),
+          ),
         );
-        
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const LessonListScreen()),
+          MaterialPageRoute(builder: (context) => const ModuleListScreen()),
         );
       } else {
-        // --- ERROS (401, 400, 500) ---
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'E-mail ou senha inválidos.')),
+          SnackBar(
+            content: Text(
+              responseData['message'] ?? 'E-mail ou senha inválidos.',
+            ),
+          ),
         );
       }
-
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro de conexão: $e. Verifique se a API está online.')),
+        SnackBar(
+          content: Text('Erro de conexão: $e. Verifique se a API está online.'),
+        ),
       );
     } finally {
       setState(() {
@@ -98,41 +111,217 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const Color neonGreen = Color(0xFF00FF9D);
+    const Color darkBackground = Color(0xFF02040A);
+    const Color cardDark = Color.fromARGB(255, 1, 6, 14);
+    const Color inputDark = Color(0xFF07101F);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Login'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'E-mail'),
-              keyboardType: TextInputType.emailAddress,
-              enabled: !_isLoading,
+      backgroundColor: darkBackground,
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF02040A), Color.fromARGB(255, 7, 19, 44)],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Senha'),
-              obscureText: true,
-              enabled: !_isLoading,
-            ),
-            const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _loginUser,
-                    child: const Text('Entrar'),
+          ),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: const [
+                      Icon(Icons.waving_hand_outlined, color: neonGreen, size: 30),
+                      SizedBox(width: 8),
+                      Text(
+                        'SINALIZA',
+                        style: TextStyle(
+                          color: neonGreen,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
                   ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: _isLoading ? null : _goToRegisterScreen,
-              child: const Text('Não tem uma conta? Cadastre-se'),
+                  const SizedBox(height: 32),
+
+                  Center(
+                    child: Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                      decoration: BoxDecoration(
+                        color: cardDark.withOpacity(0.96),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            blurRadius: 10,
+                            offset: const Offset(0, 18),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: neonGreen.withOpacity(0.08),
+                              border: Border.all(
+                                color: neonGreen.withOpacity(0.3),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: const Icon(Icons.login_rounded, color: neonGreen, size: 34),
+                          ),
+                          const SizedBox(height: 16),
+
+                          const Text(
+                            'Entrar',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+
+                          Text(
+                            'Acesse sua conta para continuar',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.6),
+                            ),
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'E-mail',
+                              labelStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              filled: true,
+                              fillColor: inputDark,
+                              prefixIcon: Icon(
+                                Icons.email_outlined,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Senha',
+                              labelStyle: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              filled: true,
+                              fillColor: inputDark,
+                              prefixIcon: Icon(
+                                Icons.lock_outline,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          _isLoading
+                              ? const CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    neonGreen,
+                                  ),
+                                )
+                              : SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _loginUser,
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      backgroundColor: neonGreen,
+                                      foregroundColor: darkBackground,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Entrar',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                          const SizedBox(height: 16),
+
+                          GestureDetector(
+                            onTap: _isLoading ? null : _goToRegisterScreen,
+                            child: Text.rich(
+                              TextSpan(
+                                text: 'Não tem uma conta? ',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 13,
+                                ),
+                                children: const [
+                                  TextSpan(
+                                    text: 'Cadastre-se',
+                                    style: TextStyle(
+                                      color: neonGreen,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
