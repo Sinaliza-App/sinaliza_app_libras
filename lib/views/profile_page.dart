@@ -31,6 +31,36 @@ class _ProfilePageState extends State<ProfilePage> {
   
   static const Color cardDark = Color(0xFF07101F); // Fundo dos cards
 
+  Map<String, dynamic> _calculateLevel(int totalScore) {
+    int level = 1;
+    int nextLevelScore = 100;
+    double progress = 0.0;
+
+    if (totalScore < 100) {
+      level = 1;
+      nextLevelScore = 100;
+      progress = totalScore / 100;
+    } else if (totalScore < 300) {
+      level = 2;
+      nextLevelScore = 300;
+      progress = (totalScore - 100) / (300 - 100);
+    } else if (totalScore < 600) {
+      level = 3;
+      nextLevelScore = 600;
+      progress = (totalScore - 300) / (600 - 300);
+    } else {
+      level = 4 + ((totalScore - 600) ~/ 500); // Nível infinito a cada 500xp
+      nextLevelScore = (level - 3) * 500 + 600;
+      progress = 1.0; // Ou lógica complexa, mas pra MVP tá ótimo
+    }
+
+    return {
+      'level': level,
+      'nextLevelScore': nextLevelScore,
+      'progress': progress.clamp(0.0, 1.0), // Garante entre 0 e 1
+    };
+  } 
+
   @override
   void initState() {
     super.initState();
@@ -328,7 +358,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                             const SizedBox(height: 40),
 
-                            // 3. CARD DE PONTUAÇÃO (XP)
+                            // 3. CARD DE NÍVEL E XP (ATUALIZADO)
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(24),
@@ -347,24 +377,29 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ],
                               ),
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    "EXPERIÊNCIA TOTAL",
-                                    style: TextStyle(
-                                      color: neonBlue,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  _isLoading 
-                                    ? const SizedBox(
-                                        height: 30, width: 30, 
-                                        child: CircularProgressIndicator(color: neonBlue)
-                                      )
-                                    : Row(
+                              child: Builder(
+                                builder: (context) {
+                                  final stats = _calculateLevel(user?.totalScore ?? 0);
+                                  final int level = stats['level'];
+                                  final double progress = stats['progress'];
+                                  final int nextScore = stats['nextLevelScore'];
+                                  
+                                  return Column(
+                                    children: [
+                                      // Título do Nível
+                                      Text(
+                                        "NÍVEL $level",
+                                        style: const TextStyle(
+                                          color: neonBlue,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 2,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      
+                                      // XP Grande
+                                      Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         crossAxisAlignment: CrossAxisAlignment.baseline,
                                         textBaseline: TextBaseline.alphabetic,
@@ -373,22 +408,46 @@ class _ProfilePageState extends State<ProfilePage> {
                                             "${user?.totalScore ?? 0}",
                                             style: const TextStyle(
                                               color: Colors.white,
-                                              fontSize: 48,
+                                              fontSize: 42,
                                               fontWeight: FontWeight.w900,
                                             ),
                                           ),
-                                          const SizedBox(width: 4),
-                                          const Text(
-                                            "XP",
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "/ $nextScore XP",
                                             style: TextStyle(
-                                              color: Colors.grey,
+                                              color: Colors.white.withValues(alpha: 0.4),
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ],
                                       ),
-                                ],
+                                      
+                                      const SizedBox(height: 16),
+
+                                      // Barra de Progresso do Nível
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: LinearProgressIndicator(
+                                          value: progress,
+                                          minHeight: 12,
+                                          backgroundColor: Colors.black,
+                                          color: neonGreen,
+                                        ),
+                                      ),
+                                      
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        "Faltam ${nextScore - (user?.totalScore ?? 0)} XP para o próximo nível",
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.4),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
                               ),
                             ),
                             const SizedBox(height: 40),

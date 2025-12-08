@@ -28,11 +28,13 @@ class _LessonListScreenState extends State<LessonListScreen> {
   late Future<CombinedLessonData> _dataFuture;
 
   // Paleta Neon e Gradiente
-  static const Color darkBG = Color(0xFF02040A); // Começo do degradê
-  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44); // Fim do degradê
+  static const Color darkBG = Color(0xFF02040A);
+  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44);
   static const Color cardDark = Color(0xFF07101F);
   static const Color neonGreen = Color(0xFF00FF9D);
   static const Color neonPurple = Color(0xFF7A5CFF);
+  static const Color neonBlue = Color(0xFF00D1FF);
+  static const Color neonOrange = Color(0xFFFF9900);
 
   @override
   void initState() {
@@ -53,12 +55,10 @@ class _LessonListScreenState extends State<LessonListScreen> {
       throw Exception('Token não encontrado. Fazendo logout.');
     }
 
-    // ATENÇÃO: Ajuste o IP conforme necessário
     const String baseUrl = apiBaseUrl;
     final headers = {'Authorization': 'Bearer $token'};
 
     try {
-      // Constrói URL com filtro
       String lessonsUrl = '$baseUrl/lessons';
       if (widget.moduleId != null) {
         lessonsUrl += '?module_id=${widget.moduleId}';
@@ -98,16 +98,36 @@ class _LessonListScreenState extends State<LessonListScreen> {
     );
   }
 
+  // Lógica visual para combinar com a tela anterior
+  Color _getModuleColor() {
+    // Usa o ID para manter a cor consistente com a lista de módulos
+    final colors = [neonGreen, const Color.fromARGB(255, 99, 65, 255), neonBlue, neonOrange];
+    int index = (widget.moduleId ?? 1) - 1; 
+    if (index < 0) index = 0;
+    return colors[index % colors.length];
+  }
+
+  IconData _getModuleIcon() {
+    // Tenta adivinhar o ícone pelo título já que não recebemos o icon_name aqui
+    final title = (widget.moduleTitle ?? "").toLowerCase();
+    if (title.contains('alfabeto')) return Icons.sort_by_alpha;
+    if (title.contains('número') || title.contains('numero')) return Icons.filter_1;
+    if (title.contains('sauda')) return Icons.waving_hand;
+    return Icons.class_outlined;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final moduleColor = _getModuleColor();
+    final moduleIcon = _getModuleIcon();
+
     return Scaffold(
-      // Removemos backgroundColor sólido para usar Container com gradiente
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [darkBG, darkBG2], // O degradê que você pediu
+            colors: [darkBG, darkBG2],
           ),
         ),
         child: SafeArea(
@@ -119,21 +139,16 @@ class _LessonListScreenState extends State<LessonListScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Logo e Título "SINALIZA"
-                    Row(
-                      children: const [
-                        Icon(Icons.waving_hand_outlined, color: neonGreen, size: 28),
-                        SizedBox(width: 10),
-                        Text(
-                          "SINALIZA",
-                          style: TextStyle(
-                            color: neonGreen,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ],
+                    // Botão Voltar
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                     ),
                     
                     // Botão de Perfil
@@ -148,25 +163,58 @@ class _LessonListScreenState extends State<LessonListScreen> {
                           context,
                           MaterialPageRoute(builder: (_) => const ProfilePage()),
                         ),
+                        tooltip: 'Perfil',
                       ),
                     ),
                   ],
                 ),
               ),
               
-              // Subtítulo do Módulo (Opcional, para saber onde estamos)
+              // --- HERO ANIMATION (A MÁGICA ACONTECE AQUI) ---
+              // Este ícone vai "voar" da tela anterior para cá
+              if (widget.moduleId != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Hero(
+                    tag: 'module_icon_${widget.moduleId}', // MESMA TAG DA TELA ANTERIOR
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: moduleColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: moduleColor.withValues(alpha: 0.2),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                          )
+                        ]
+                      ),
+                      child: Icon(
+                        moduleIcon,
+                        size: 40,
+                        color: moduleColor,
+                      ),
+                    ),
+                  ),
+                ),
+              // ------------------------------------------------
+
+              // Título do Módulo
               if (widget.moduleTitle != null)
                 Padding(
-                  padding: const EdgeInsets.only(left: 24, bottom: 16),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      widget.moduleTitle!,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Text(
+                    widget.moduleTitle!.toUpperCase(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                      shadows: [
+                        Shadow(color: moduleColor.withValues(alpha: 0.5), blurRadius: 10)
+                      ]
                     ),
                   ),
                 ),
@@ -212,14 +260,12 @@ class _LessonListScreenState extends State<LessonListScreen> {
 
                         return GestureDetector(
                           onTap: () async {
-                            // Vai para a INSTRUÇÃO primeiro
                             await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => LessonInstructionScreen(lesson: lesson),
                               ),
                             );
-                            // Atualiza ao voltar
                             if (mounted) _refreshData();
                           },
                           child: Container(
@@ -229,28 +275,25 @@ class _LessonListScreenState extends State<LessonListScreen> {
                               color: cardDark,
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
-                                color: isDone ? neonGreen : neonPurple.withValues(alpha: 0.5),
+                                color: isDone ? neonGreen : neonPurple.withValues(alpha: 0.3),
                                 width: 1.5,
                               ),
                               boxShadow: [
                                 BoxShadow(
                                   color: (isDone ? neonGreen : neonPurple).withValues(alpha: 0.1),
                                   blurRadius: 12,
-                                  spreadRadius: 0,
+                                  spreadRadius: 2,
                                 ),
                               ],
                             ),
                             child: Row(
                               children: [
-                                // Ícone de Status (Estrela ou Cadeado/Mão)
                                 Icon(
-                                  isDone ? Icons.star : Icons.front_hand, // Troquei cadeado por mão se não feito
+                                  isDone ? Icons.star : Icons.front_hand,
                                   color: isDone ? neonGreen : neonPurple,
-                                  size: 28,
+                                  size: 32,
                                 ),
                                 const SizedBox(width: 16),
-                                
-                                // Textos
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +308,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        lesson["description"] ?? "",
+                                        lesson["description"] ?? "Toque para começar",
                                         style: TextStyle(
                                           color: Colors.white.withValues(alpha: 0.6),
                                           fontSize: 14,
@@ -276,14 +319,6 @@ class _LessonListScreenState extends State<LessonListScreen> {
                                     ],
                                   ),
                                 ),
-                                
-                                // Seta
-                                if (!isDone)
-                                  Icon(
-                                    Icons.arrow_forward_ios_rounded,
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                    size: 18,
-                                  ),
                               ],
                             ),
                           ),
@@ -297,7 +332,6 @@ class _LessonListScreenState extends State<LessonListScreen> {
           ),
         ),
       ),
-      // Botão flutuante
       floatingActionButton: FloatingActionButton(
         onPressed: _refreshData,
         backgroundColor: neonGreen,

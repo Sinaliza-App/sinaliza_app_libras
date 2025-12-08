@@ -161,7 +161,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             _secondsHeld = duration.inSeconds;
             // Verifica se mudou o segundo (para vibrar levemente a cada "tic")
             if (duration.inSeconds > _secondsHeld) {
-              if (await Vibration.hasVibrator() ?? false) {
+              if (await Vibration.hasVibrator()) {
                 Vibration.vibrate(duration: 50); // Vibração leve
                 debugPrint("📳 Tic de vibração leve");
               }
@@ -207,7 +207,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   // 2. VIBRAÇÃO FORTE (Novo Código)
   // Verifica se o celular tem motor de vibração
-  if (await Vibration.hasVibrator() ?? false) {
+  if (await Vibration.hasVibrator()) {
       Vibration.vibrate(duration: 500); // Vibra por meio segundo
       debugPrint("📳 Vibrando agora!");
   }
