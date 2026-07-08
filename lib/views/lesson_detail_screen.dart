@@ -5,9 +5,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:sinaliza_app_libras/constants.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:confetti/confetti.dart';
-import 'package:audioplayers/audioplayers.dart'; // Para Sons
+import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
 
 class LessonDetailScreen extends StatefulWidget {
@@ -24,24 +23,15 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   static const Color neonGreen = Color(0xFF00FF9D);
   static const Color neonOrange = Color(0xFFFF9900);
 
-  // --- CORES DO DEGRADÊ DE FUNDO (IGUAIS ÀS OUTRAS TELAS) ---
-  static const Color bgTop = Color(0xFF02040A); // Preto (Topo)
-  static const Color bgBottom = Color.fromARGB(
-    255,
-    7,
-    19,
-    44,
-  ); // Azul Escuro (Fundo)
-  static const Color cardDark = Color(0xFF0A1223); // Fundo dos painéis
+  // --- CORES DO DEGRADÊ DE FUNDO ---
+  static const Color bgTop = Color(0xFF02040A);
+  static const Color bgBottom = Color.fromARGB(255, 7, 19, 44);
+  static const Color cardDark = Color(0xFF0A1223);
 
-  // --- CÂMERA ---
+  // --- CÂMERA E INFERÊNCIA HTTP ---
   CameraController? _cameraController;
   bool _isCameraReady = false;
-
-  // --- WEBSOCKET ---
-  WebSocketChannel? _channel;
-  StreamSubscription? _streamSubscription;
-  bool _isStreaming = false;
+  bool _isProcessingFrame = false; // Trava para não afogar o servidor
   DateTime? _lastFrameTime;
 
   // --- ESTADO DO JOGO ---
@@ -55,11 +45,11 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   final int _secondsToHold = 3;
   int _secondsHeld = 0;
 
-  // --- PROGRESSO ---
+  // --- PROGRESSO E EFEITOS ---
   bool _isSavingProgress = false;
   final _storage = const FlutterSecureStorage();
   late ConfettiController _confettiController;
-  final AudioPlayer _audioPlayer = AudioPlayer(); // Player de som
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   @override
   void initState() {
@@ -82,8 +72,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   @override
   void dispose() {
-    _streamSubscription?.cancel();
-    _channel?.sink.close();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
     _confettiController.dispose();
@@ -109,111 +97,106 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       if (!mounted) return;
       setState(() => _isCameraReady = true);
-      _connectToWebSocket();
+      _startVisionStream(); // Inicia o envio via HTTP
     } catch (e) {
       debugPrint("Erro ao iniciar câmera: $e");
     }
   }
 
-  void _connectToWebSocket() {
+ // --- NOVA LÓGICA HTTP ---
+  void _startVisionStream() {
+    _cameraController!.startImageStream((CameraImage image) {
+      if (_isProcessingFrame || _isCorrect) return;
+
+      final now = DateTime.now();
+      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 300) {
+        return;
+      }
+      
+      _lastFrameTime = now;
+      _isProcessingFrame = true;
+
+      final plane = image.planes[0];
+      final String imageBase64 = base64Encode(plane.bytes);
+
+      // AGORA ENVIAMOS AS DIMENSÕES TAMBÉM!
+      _sendFrameToApi(imageBase64, image.width, image.height, plane.bytesPerRow);
+    });
+  }
+
+  Future<void> _sendFrameToApi(String base64Image, int width, int height, int stride) async {
     try {
-      // ATENÇÃO: Ajuste o IP conforme necessário
-      final wsUrl = Uri.parse(wsBaseUrl);
-      _channel = WebSocketChannel.connect(wsUrl);
+      final url = Uri.parse('$apiBaseUrl/api/vision/predict');
+      
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'image': base64Image,
+          'width': width,   // <--- NOVO
+          'height': height, // <--- NOVO
+          'stride': stride  // <--- NOVO
+        }),
+      ).timeout(const Duration(seconds: 2));
 
-      _cameraController!.startImageStream((CameraImage image) {
-        final now = DateTime.now();
-        if (_lastFrameTime != null &&
-            now.difference(_lastFrameTime!).inMilliseconds < 100) {
-          return;
-        }
-        _lastFrameTime = now;
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body);
+        final String gesture = data['prediction'] ?? "Nenhum";
+        final double confidence = (data['confidence'] ?? 0.0).toDouble();
 
-        if (_isStreaming) return;
-        _isStreaming = true;
-
-        final plane = image.planes[0];
-        final String imageBase64 = base64Encode(plane.bytes);
-
-        _channel?.sink.add(
-          jsonEncode({
-            'image': imageBase64,
-            'height': image.height,
-            'width': image.width,
-            'stride': plane.bytesPerRow,
-          }),
-        );
-      });
-
-      _streamSubscription = _channel?.stream.listen(
-        (message) async {
-          if (!mounted) return;
-          final data = json.decode(message);
-          final String gesture = data['gesto'];
-          final double confidence = data['confianca'];
-
-          bool isCurrentlyMatching =
-              (confidence > 0.6 && gesture == _targetGesture);
-
-          if (isCurrentlyMatching) {
-            _firstDetectionTime ??= DateTime.now();
-            final duration = DateTime.now().difference(_firstDetectionTime!);
-            _secondsHeld = duration.inSeconds;
-            // Verifica se mudou o segundo (para vibrar levemente a cada "tic")
-            if (duration.inSeconds > _secondsHeld) {
-              if (await Vibration.hasVibrator()) {
-                Vibration.vibrate(duration: 50); // Vibração leve
-                debugPrint("📳 Tic de vibração leve");
-              }
-            }
-            _secondsHeld = duration.inSeconds;
-
-            if (_secondsHeld >= _secondsToHold && !_isCorrect) {
-              _isCorrect = true;
-              _confettiController.play();
-              _onSuccess();
-            }
-          } else {
-            if (!_isCorrect) {
-              _firstDetectionTime = null;
-              _secondsHeld = 0;
-            }
-          }
-
-          setState(() {
-            _detectedGesture = gesture;
-            _detectedConfidence = confidence;
-          });
-          _isStreaming = false;
-        },
-        onError: (error) {
-          debugPrint("Erro WebSocket: $error");
-          _isStreaming = false;
-        },
-        onDone: () => _isStreaming = false,
-      );
+        _handleDetectionResult(gesture, confidence);
+      }
     } catch (e) {
-      debugPrint("Erro conexão WS: $e");
+      debugPrint("Erro na inferência HTTP: $e");
+    } finally {
+      if (mounted) _isProcessingFrame = false;
     }
   }
 
-  void _onSuccess() async {
-  setState(() {
-    _isCorrect = true;
-  });
+  // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
+  void _handleDetectionResult(String gesture, double confidence) async {
+    bool isCurrentlyMatching = (confidence > 0.6 && gesture == _targetGesture);
 
-  // 1. Confetes
-  _confettiController.play();
+    if (isCurrentlyMatching) {
+      _firstDetectionTime ??= DateTime.now();
+      final duration = DateTime.now().difference(_firstDetectionTime!);
+      int currentSeconds = duration.inSeconds;
 
-  // 2. VIBRAÇÃO FORTE (Novo Código)
-  // Verifica se o celular tem motor de vibração
-  if (await Vibration.hasVibrator()) {
-      Vibration.vibrate(duration: 500); // Vibra por meio segundo
-      debugPrint("📳 Vibrando agora!");
+      if (currentSeconds > _secondsHeld) {
+        if (await Vibration.hasVibrator()) {
+          Vibration.vibrate(duration: 50);
+        }
+      }
+      _secondsHeld = currentSeconds;
+
+      if (_secondsHeld >= _secondsToHold && !_isCorrect) {
+        _isCorrect = true;
+        _onSuccess();
+      }
+    } else {
+      if (!_isCorrect) {
+        _firstDetectionTime = null;
+        _secondsHeld = 0;
+      }
+    }
+
+    setState(() {
+      _detectedGesture = gesture;
+      _detectedConfidence = confidence;
+    });
   }
+
+  void _onSuccess() async {
+    setState(() {
+      _isCorrect = true;
+    });
+
+    _confettiController.play();
+
+    if (await Vibration.hasVibrator()) {
+      Vibration.vibrate(duration: 500);
+    }
     try {
-      // Certifique-se de ter o arquivo assets/sounds/success.mp3
-      // Se não tiver, comente a linha abaixo para não dar erro
       await _audioPlayer.play(AssetSource('sounds/success.mp3'));
     } catch (e) {
       debugPrint("Erro ao tocar som: $e");
@@ -250,7 +233,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (!mounted) return;
       final responseData = json.decode(response.body);
 
-      // --- RESTAURADO: MENSAGENS DE FEEDBACK (SNACKBAR) ---
       if (response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -276,11 +258,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           ),
         );
       }
-      // -----------------------------------------------------
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
     } finally {
       if (mounted) setState(() => _isSavingProgress = false);
     }
@@ -289,7 +268,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   Color _getStatusColor() {
     if (_isCorrect) return neonGreen;
     if (_firstDetectionTime != null) return neonOrange;
-    return Colors.white.withValues(alpha: 0.2);
+    return Colors.white.withOpacity(0.2);
   }
 
   @override
@@ -298,7 +277,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     final Color statusColor = _getStatusColor();
 
     return Scaffold(
-      // AQUI ESTÁ O DEGRADÊ CORRETO (Igual às outras telas)
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -323,10 +301,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       child: Row(
                         children: [
                           IconButton(
-                            icon: const Icon(
-                              Icons.arrow_back_ios_new,
-                              color: Colors.white,
-                            ),
+                            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
                             onPressed: () => Navigator.pop(context),
                           ),
                           Expanded(
@@ -351,7 +326,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         Text(
                           "Faça o sinal para:",
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
+                            color: Colors.white.withOpacity(0.7),
                             fontSize: 14,
                           ),
                         ),
@@ -370,27 +345,22 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     // Câmera
                     Expanded(
                       child: Container(
-                        width: double.infinity, // Força ocupar largura total
+                        width: double.infinity,
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: statusColor,
-                            width: _isCorrect || _firstDetectionTime != null
-                                ? 4
-                                : 2,
+                            width: _isCorrect || _firstDetectionTime != null ? 4 : 2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: statusColor.withValues(
-                                alpha: _isCorrect ? 0.5 : 0.2,
-                              ),
+                              color: statusColor.withOpacity(_isCorrect ? 0.5 : 0.2),
                               blurRadius: 20,
                               spreadRadius: 2,
                             ),
                           ],
                         ),
-                        // ClipRRect garante que a imagem não vaze para fora das bordas arredondadas
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(20),
                           child: _isCameraReady
@@ -400,56 +370,36 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                       width: constraints.maxWidth,
                                       height: constraints.maxHeight,
                                       child: FittedBox(
-                                        fit: BoxFit
-                                            .cover, // <--- O SEGREDO: Preenche tudo cortando excessos
+                                        fit: BoxFit.cover,
                                         child: SizedBox(
-                                          // Invertemos W e H porque a câmera nativa geralmente entrega a imagem 'deitada'
-                                          width: _cameraController!
-                                              .value
-                                              .previewSize!
-                                              .height,
-                                          height: _cameraController!
-                                              .value
-                                              .previewSize!
-                                              .width,
-                                          child: CameraPreview(
-                                            _cameraController!,
-                                          ),
+                                          width: _cameraController!.value.previewSize!.height,
+                                          height: _cameraController!.value.previewSize!.width,
+                                          child: CameraPreview(_cameraController!),
                                         ),
                                       ),
                                     );
                                   },
                                 )
                               : const Center(
-                                  child: CircularProgressIndicator(
-                                    color: neonGreen,
-                                  ),
+                                  child: CircularProgressIndicator(color: neonGreen),
                                 ),
                         ),
                       ),
                     ),
 
-                    // Feedback (Contador Novo)
+                    // Feedback (Contador)
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 20,
-                      ),
+                      margin: const EdgeInsets.only(top: 20),
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
                       decoration: BoxDecoration(
                         color: cardDark,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.05),
-                        ),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
                       ),
                       child: Column(
                         children: [
                           if (_isCorrect) ...[
-                            const Icon(
-                              Icons.celebration,
-                              color: neonGreen,
-                              size: 32,
-                            ),
+                            const Icon(Icons.celebration, color: neonGreen, size: 32),
                             const SizedBox(height: 8),
                             const Text(
                               "PARABÉNS!",
@@ -463,7 +413,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             Text(
                               "MANTENHA O SINAL",
                               style: TextStyle(
-                                color: neonOrange.withValues(alpha: 0.8),
+                                color: neonOrange.withOpacity(0.8),
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.2,
@@ -487,7 +437,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 Text(
                                   "/ ${_secondsToHold}s",
                                   style: TextStyle(
-                                    color: neonOrange.withValues(alpha: 0.6),
+                                    color: neonOrange.withOpacity(0.6),
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                     height: 1.2,
@@ -501,9 +451,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               child: LinearProgressIndicator(
                                 value: (_secondsHeld + 1) / _secondsToHold,
                                 minHeight: 8,
-                                backgroundColor: neonOrange.withValues(
-                                  alpha: 0.2,
-                                ),
+                                backgroundColor: neonOrange.withOpacity(0.2),
                                 color: neonOrange,
                               ),
                             ),
@@ -517,7 +465,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 fontWeight: FontWeight.bold,
                                 color: _detectedGesture != "Nenhum"
                                     ? Colors.white
-                                    : Colors.white.withValues(alpha: 0.4),
+                                    : Colors.white.withOpacity(0.4),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -527,9 +475,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 value: _detectedConfidence,
                                 minHeight: 8,
                                 backgroundColor: Colors.grey[800],
-                                color: _detectedConfidence > 0.6
-                                    ? neonGreen
-                                    : neonOrange,
+                                color: _detectedConfidence > 0.6 ? neonGreen : neonOrange,
                               ),
                             ),
                           ],
@@ -541,29 +487,21 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
                     // Botão
                     _isSavingProgress
-                        ? const Center(
-                            child: CircularProgressIndicator(color: neonGreen),
-                          )
+                        ? const Center(child: CircularProgressIndicator(color: neonGreen))
                         : SizedBox(
                             width: double.infinity,
                             height: 56,
                             child: ElevatedButton.icon(
                               icon: Icon(
                                 _isCorrect ? Icons.check_circle : Icons.lock,
-                                color: _isCorrect
-                                    ? Colors.black
-                                    : Colors.white.withValues(alpha: 0.5),
+                                color: _isCorrect ? Colors.black : Colors.white.withOpacity(0.5),
                               ),
                               label: Text(
-                                _isCorrect
-                                    ? 'CONCLUIR LIÇÃO (+10 XP)'
-                                    : 'Acerte o sinal para liberar',
+                                _isCorrect ? 'CONCLUIR LIÇÃO (+10 XP)' : 'Acerte o sinal para liberar',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: _isCorrect
-                                      ? Colors.black
-                                      : Colors.white.withValues(alpha: 0.5),
+                                  color: _isCorrect ? Colors.black : Colors.white.withOpacity(0.5),
                                 ),
                               ),
                               onPressed: _isCorrect ? _saveProgress : null,
@@ -574,9 +512,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
-                                    color: _isCorrect
-                                        ? Colors.transparent
-                                        : Colors.white.withValues(alpha: 0.1),
+                                    color: _isCorrect ? Colors.transparent : Colors.white.withOpacity(0.1),
                                   ),
                                 ),
                               ),
@@ -586,7 +522,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                   ],
                 ),
               ),
-
               Align(
                 alignment: Alignment.topCenter,
                 child: ConfettiWidget(

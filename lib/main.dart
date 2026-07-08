@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // Para banco de dados no 
 import 'package:sinaliza_app_libras/views/splash_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:flutter/cupertino.dart';
 
 Future<void> main() async {
   // Garante que o Flutter esteja pronto antes de rodar código
@@ -41,8 +42,8 @@ class MyApp extends StatelessWidget {
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             // Usa a transição de "Slide" (deslizar) em todas as plataformas móveis
-            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
           },
         ),
         // -----------------------------------------------
