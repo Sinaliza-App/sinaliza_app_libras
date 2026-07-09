@@ -104,22 +104,24 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
  // --- NOVA LÓGICA HTTP ---
-  void _startVisionStream() {
+void _startVisionStream() {
     _cameraController!.startImageStream((CameraImage image) {
       if (_isProcessingFrame || _isCorrect) return;
 
       final now = DateTime.now();
-      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 300) {
+      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 1000) {
         return;
       }
       
       _lastFrameTime = now;
       _isProcessingFrame = true;
 
+      // RASTREADOR 1: Verifica se a câmera está conseguindo ler os frames
+      debugPrint("📸 [FLUTTER] Frame capturado! Convertendo para Base64...");
+
       final plane = image.planes[0];
       final String imageBase64 = base64Encode(plane.bytes);
 
-      // AGORA ENVIAMOS AS DIMENSÕES TAMBÉM!
       _sendFrameToApi(imageBase64, image.width, image.height, plane.bytesPerRow);
     });
   }
@@ -128,16 +130,22 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     try {
       final url = Uri.parse('$apiBaseUrl/api/vision/predict');
       
+      // RASTREADOR 2: Verifica a URL exata e se o app tenta disparar o POST
+      debugPrint("🚀 [FLUTTER] Disparando POST para: $url");
+      
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'image': base64Image,
-          'width': width,   // <--- NOVO
-          'height': height, // <--- NOVO
-          'stride': stride  // <--- NOVO
+          'width': width,
+          'height': height,
+          'stride': stride
         }),
-      ).timeout(const Duration(seconds: 2));
+      ).timeout(const Duration(seconds: 30));
+
+      // RASTREADOR 3: Verifica se a nuvem respondeu algo
+      debugPrint("✅ [FLUTTER] Resposta do servidor recebida: Status ${response.statusCode}");
 
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body);
@@ -147,39 +155,51 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         _handleDetectionResult(gesture, confidence);
       }
     } catch (e) {
-      debugPrint("Erro na inferência HTTP: $e");
+      // RASTREADOR 4: Captura o motivo exato da falha interna
+      debugPrint("❌ [FLUTTER] Erro fatal na requisição: $e");
     } finally {
       if (mounted) _isProcessingFrame = false;
     }
   }
 
   // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
-  void _handleDetectionResult(String gesture, double confidence) async {
+ void _handleDetectionResult(String gesture, double confidence) async {
     bool isCurrentlyMatching = (confidence > 0.6 && gesture == _targetGesture);
 
     if (isCurrentlyMatching) {
-      _firstDetectionTime ??= DateTime.now();
-      final duration = DateTime.now().difference(_firstDetectionTime!);
-      int currentSeconds = duration.inSeconds;
+      if (!_isCorrect) {
+        // Acertou o frame: Ganha 1 ponto (1 segundo)
+        _secondsHeld++;
+        
+        // Mantém a variável preenchida para a UI mostrar "MANTENHA O SINAL"
+        _firstDetectionTime ??= DateTime.now(); 
 
-      if (currentSeconds > _secondsHeld) {
+        // Dá o feedback tátil a cada segundo preenchido
         if (await Vibration.hasVibrator()) {
           Vibration.vibrate(duration: 50);
         }
-      }
-      _secondsHeld = currentSeconds;
 
-      if (_secondsHeld >= _secondsToHold && !_isCorrect) {
-        _isCorrect = true;
-        _onSuccess();
+        // Se bateu a meta (ex: 3 segundos)
+        if (_secondsHeld >= _secondsToHold) {
+          _isCorrect = true;
+          _onSuccess();
+        }
       }
     } else {
       if (!_isCorrect) {
-        _firstDetectionTime = null;
-        _secondsHeld = 0;
+        // IA piscou ou o usuário mexeu a mão: perde 1 ponto, mas não zera de uma vez!
+        if (_secondsHeld > 0) {
+          _secondsHeld--;
+        }
+        
+        // Só apaga a UI amarela se os pontos realmente zerarem
+        if (_secondsHeld == 0) {
+          _firstDetectionTime = null;
+        }
       }
     }
 
+    // Atualiza a tela com o que a IA está enxergando agora
     setState(() {
       _detectedGesture = gesture;
       _detectedConfidence = confidence;
