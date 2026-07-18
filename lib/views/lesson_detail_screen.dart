@@ -8,6 +8,13 @@ import 'package:sinaliza_app_libras/constants.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter/foundation.dart'; // Para o compute()
+
+// --- FUNÇÃO ISOLADA (FORA DA CLASSE) PARA NÃO TRAVAR A UI ---
+String _processFrameInIsolate(Uint8List bytes) {
+  return base64Encode(bytes);
+}
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic> lesson;
@@ -28,11 +35,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   static const Color bgBottom = Color.fromARGB(255, 7, 19, 44);
   static const Color cardDark = Color(0xFF0A1223);
 
-  // --- CÂMERA E INFERÊNCIA HTTP ---
+  // --- CÂMERA E INFERÊNCIA WEBSOCKET ---
   CameraController? _cameraController;
   bool _isCameraReady = false;
   bool _isProcessingFrame = false; // Trava para não afogar o servidor
   DateTime? _lastFrameTime;
+  WebSocketChannel? _channel;
+  bool _isConnected = false;
 
   // --- ESTADO DO JOGO ---
   String _detectedGesture = "Nenhum";
@@ -56,9 +65,47 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     super.initState();
     _extractTargetGesture();
     _initializeCamera();
+    _connectWebSocket();
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
+  }
+
+  void _connectWebSocket() {
+    try {
+      _channel = WebSocketChannel.connect(Uri.parse(wsBaseUrl));
+      _isConnected = true;
+      
+      _channel!.stream.listen(
+        (message) {
+          if (!mounted) return;
+          try {
+            final data = jsonDecode(message);
+            final String gesture = data['prediction'] ?? "Nenhum";
+            final double confidence = (data['confidence'] ?? 0.0).toDouble();
+
+            _handleDetectionResult(gesture, confidence);
+          } catch (e) {
+            debugPrint("Erro ao decodificar resposta do WS: $e");
+          } finally {
+            _isProcessingFrame = false;
+          }
+        },
+        onError: (error) {
+          debugPrint("Erro no WebSocket: $error");
+          _isConnected = false;
+          _isProcessingFrame = false;
+        },
+        onDone: () {
+          debugPrint("WebSocket desconectado");
+          _isConnected = false;
+          _isProcessingFrame = false;
+        },
+      );
+    } catch (e) {
+      debugPrint("Falha ao conectar WebSocket: $e");
+      _isConnected = false;
+    }
   }
 
   void _extractTargetGesture() {
@@ -74,6 +121,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   void dispose() {
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
+    _channel?.sink.close();
     _confettiController.dispose();
     super.dispose();
   }
@@ -97,69 +145,46 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       if (!mounted) return;
       setState(() => _isCameraReady = true);
-      _startVisionStream(); // Inicia o envio via HTTP
+      _startVisionStream(); // Inicia o envio via WebSocket
     } catch (e) {
       debugPrint("Erro ao iniciar câmera: $e");
     }
   }
 
- // --- NOVA LÓGICA HTTP ---
-void _startVisionStream() {
-    _cameraController!.startImageStream((CameraImage image) {
-      if (_isProcessingFrame || _isCorrect) return;
+ // --- NOVA LÓGICA WEBSOCKET COM ISOLATE ---
+ void _startVisionStream() {
+    _cameraController!.startImageStream((CameraImage image) async {
+      // Ignora se não estiver conectado, se já estiver processando ou se já acertou
+      if (!_isConnected || _isProcessingFrame || _isCorrect) return;
 
       final now = DateTime.now();
-      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 1000) {
+      // Otimizamos para até 10 frames por segundo de processamento para maior fluidez
+      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 100) {
         return;
       }
       
       _lastFrameTime = now;
-      _isProcessingFrame = true;
+      _isProcessingFrame = true; // Trava o envio até a resposta voltar
 
-      // RASTREADOR 1: Verifica se a câmera está conseguindo ler os frames
-      debugPrint("📸 [FLUTTER] Frame capturado! Convertendo para Base64...");
+      try {
+        final plane = image.planes[0];
+        
+        // --- O SEGREDO DO FPS ALTO ---
+        // Usamos o compute() para jogar a conversão pesada Base64 para outra Thread!
+        final String imageBase64 = await compute(_processFrameInIsolate, plane.bytes);
 
-      final plane = image.planes[0];
-      final String imageBase64 = base64Encode(plane.bytes);
-
-      _sendFrameToApi(imageBase64, image.width, image.height, plane.bytesPerRow);
-    });
-  }
-
-  Future<void> _sendFrameToApi(String base64Image, int width, int height, int stride) async {
-    try {
-      final url = Uri.parse('$apiBaseUrl/api/vision/predict');
-      
-      // RASTREADOR 2: Verifica a URL exata e se o app tenta disparar o POST
-      debugPrint("🚀 [FLUTTER] Disparando POST para: $url");
-      
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'image': base64Image,
-          'width': width,
-          'height': height,
-          'stride': stride
-        }),
-      ).timeout(const Duration(seconds: 30));
-
-      // RASTREADOR 3: Verifica se a nuvem respondeu algo
-      debugPrint("✅ [FLUTTER] Resposta do servidor recebida: Status ${response.statusCode}");
-
-      if (response.statusCode == 200 && mounted) {
-        final data = jsonDecode(response.body);
-        final String gesture = data['prediction'] ?? "Nenhum";
-        final double confidence = (data['confidence'] ?? 0.0).toDouble();
-
-        _handleDetectionResult(gesture, confidence);
+        // Dispara direto no Socket (muito mais rápido que HTTP)
+        _channel!.sink.add(jsonEncode({
+          'image': imageBase64,
+          'width': image.width,
+          'height': image.height,
+          'stride': plane.bytesPerRow
+        }));
+      } catch (e) {
+        debugPrint("Erro no processamento do frame: $e");
+        _isProcessingFrame = false;
       }
-    } catch (e) {
-      // RASTREADOR 4: Captura o motivo exato da falha interna
-      debugPrint("❌ [FLUTTER] Erro fatal na requisição: $e");
-    } finally {
-      if (mounted) _isProcessingFrame = false;
-    }
+    });
   }
 
   // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
