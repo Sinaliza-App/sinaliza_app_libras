@@ -7,7 +7,9 @@ import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:sinaliza_app_libras/views/ranking_screen.dart';
-
+import 'package:sinaliza_app_libras/views/dictionary_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
 class ModuleListScreen extends StatefulWidget {
   const ModuleListScreen({super.key});
 
@@ -151,7 +153,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                       ],
                     ),
 
-                    // 2. DIREITA: Ícones (Troféu + Perfil)
+                    // 2. DIREITA: Ícones (Troféu + Dicionário + Perfil)
                     Row(
                       children: [
                         // Troféu (Ranking)
@@ -176,21 +178,70 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                         ),
 
                         const SizedBox(width: 12), // Espaço entre botões
-                        // Perfil
+                        // Dicionário
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.05),
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            icon: const Icon(Icons.person, color: Colors.white),
+                            icon: const Icon(
+                              Icons.menu_book_rounded,
+                              color: neonBlue,
+                            ),
                             onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const DictionaryScreen(),
+                              ),
+                            ),
+                            tooltip: 'Dicionário de Sinais',
+                          ),
+                        ),
+
+                        const SizedBox(width: 12), // Espaço entre botões
+                        // Perfil
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: neonBlue.withValues(alpha: 0.3),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (c) => const ProfilePage(),
                               ),
                             ),
-                            tooltip: 'Perfil',
+                            child: Padding(
+                              padding: const EdgeInsets.all(2.0),
+                              child: Consumer<UserProvider>(
+                                builder: (context, userProvider, child) {
+                                  final user = userProvider.user;
+                                  if (user != null &&
+                                      user.profilePicture != null &&
+                                      user.profilePicture!.isNotEmpty) {
+                                    return CircleAvatar(
+                                      radius: 18,
+                                      backgroundImage: MemoryImage(
+                                        base64Decode(user.profilePicture!),
+                                      ),
+                                    );
+                                  } else {
+                                    return const CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: Colors.transparent,
+                                      child: Icon(Icons.person, color: Colors.white),
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -281,46 +332,57 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                           }
                         }
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 20),
-                          decoration: BoxDecoration(
-                            color: cardDark,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: isLocked
-                                  ? Colors.grey.withValues(alpha: 0.3)
-                                  : color.withValues(alpha: 0.5),
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: isLocked
-                                    ? Colors.black
-                                    : color.withValues(alpha: 0.08),
-                                blurRadius: 15,
-                                offset: const Offset(0, 4),
+
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: Duration(milliseconds: 400 + (index * 100).clamp(0, 600)),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Transform.translate(
+                              offset: Offset(0, 50 * (1 - value)),
+                              child: Opacity(
+                                opacity: value,
+                                child: child,
                               ),
-                            ],
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(24),
-                              onTap: isLocked
-                                  ? null
-                                  : () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              LessonListScreen(
-                                                moduleId: module['id'],
-                                                moduleTitle: module['title'],
-                                              ),
+                            );
+                          },
+                          child: GestureDetector(
+                            onTap: isLocked
+                                ? null
+                                : () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => LessonListScreen(
+                                          moduleId: module['id'],
+                                          moduleTitle: module['title'],
+                                          iconName: module['icon_name'],
                                         ),
-                                      );
-                                      if (mounted) _refreshModules();
-                                    },
+                                      ),
+                                    );
+                                    if (mounted) _refreshModules();
+                                  },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 20),
+                              decoration: BoxDecoration(
+                                color: cardDark,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: isLocked
+                                      ? Colors.grey.withValues(alpha: 0.3)
+                                      : color.withValues(alpha: 0.5),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: isLocked
+                                        ? Colors.black
+                                        : color.withValues(alpha: 0.08),
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
                               child: Padding(
                                 padding: const EdgeInsets.all(24),
                                 child: Row(

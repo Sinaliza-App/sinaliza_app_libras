@@ -6,7 +6,8 @@ import 'package:sinaliza_app_libras/views/lesson_instruction_screen.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart' as login_screen;
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/constants.dart';
-
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
 class CombinedLessonData {
   final List<Map<String, dynamic>> lessons;
   final Set<int> completedLessonIds;
@@ -188,16 +189,43 @@ class _LessonListScreenState extends State<LessonListScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: neonBlue.withValues(alpha: 0.3),
+                          width: 1.5,
+                        ),
                       ),
-                      child: IconButton(
-                        icon: const Icon(Icons.person, color: Colors.white),
-                        onPressed: () => Navigator.push(
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => const ProfilePage(),
                           ),
                         ),
-                        tooltip: 'Perfil',
+                        child: Padding(
+                          padding: const EdgeInsets.all(2.0),
+                          child: Consumer<UserProvider>(
+                            builder: (context, userProvider, child) {
+                              final user = userProvider.user;
+                              if (user != null &&
+                                  user.profilePicture != null &&
+                                  user.profilePicture!.isNotEmpty) {
+                                return CircleAvatar(
+                                  radius: 18,
+                                  backgroundImage: MemoryImage(
+                                    base64Decode(user.profilePicture!),
+                                  ),
+                                );
+                              } else {
+                                return const CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Colors.transparent,
+                                  child: Icon(Icons.person, color: Colors.white),
+                                );
+                              }
+                            },
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -295,76 +323,90 @@ class _LessonListScreenState extends State<LessonListScreen> {
                         final lesson = lessons[index];
                         final bool isDone = completed.contains(lesson["id"]);
 
-                        return GestureDetector(
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    LessonInstructionScreen(lesson: lesson),
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: Duration(milliseconds: 400 + (index * 100).clamp(0, 600)),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Transform.translate(
+                              offset: Offset(0, 50 * (1 - value)),
+                              child: Opacity(
+                                opacity: value,
+                                child: child,
                               ),
                             );
-                            if (mounted) _refreshData();
                           },
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 18),
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: cardDark,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: isDone
-                                    ? neonGreen
-                                    : neonPurple.withValues(alpha: 0.3),
-                                width: 1.5,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: (isDone ? neonGreen : neonPurple)
-                                      .withValues(alpha: 0.1),
-                                  blurRadius: 12,
-                                  spreadRadius: 2,
+                          child: GestureDetector(
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      LessonInstructionScreen(lesson: lesson),
                                 ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  isDone ? Icons.star : Icons.front_hand,
-                                  color: isDone ? neonGreen : neonPurple,
-                                  size: 32,
+                              );
+                              if (mounted) _refreshData();
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 18),
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: cardDark,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: isDone
+                                      ? neonGreen
+                                      : neonPurple.withValues(alpha: 0.3),
+                                  width: 1.5,
                                 ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        lesson["title"],
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        lesson["description"] ??
-                                            "Toque para começar",
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.6,
-                                          ),
-                                          fontSize: 14,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (isDone ? neonGreen : neonPurple)
+                                        .withValues(alpha: 0.1),
+                                    blurRadius: 12,
+                                    spreadRadius: 2,
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isDone ? Icons.star : Icons.front_hand,
+                                    color: isDone ? neonGreen : neonPurple,
+                                    size: 32,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          lesson["title"],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          lesson["description"] ??
+                                              "Toque para começar",
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            fontSize: 14,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );
