@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
+
+import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -56,7 +56,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   // --- PROGRESSO E EFEITOS ---
   bool _isSavingProgress = false;
-  final _storage = const FlutterSecureStorage();
   late ConfettiController _confettiController;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
@@ -251,23 +250,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     setState(() {
       _isSavingProgress = true;
     });
-    final token = await _storage.read(key: 'jwt_token');
-
-    if (token == null) {
-      if (mounted) setState(() => _isSavingProgress = false);
-      return;
-    }
 
     const String apiUrl = '$apiBaseUrl/progress';
 
     try {
-      final response = await http
-          .post(
-            Uri.parse(apiUrl),
-            headers: {
-              'Content-Type': 'application/json; charset=UTF-8',
-              'Authorization': 'Bearer $token',
-            },
+      final response = await ApiService.post(
+            apiUrl,
             body: json.encode({'lesson_id': widget.lesson['id'], 'score': 10}),
           )
           .timeout(const Duration(seconds: 10));
@@ -310,7 +298,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   Color _getStatusColor() {
     if (_isCorrect) return neonGreen;
     if (_firstDetectionTime != null) return neonOrange;
-    return Colors.white.withOpacity(0.2);
+    return Colors.white.withValues(alpha: 0.2);
   }
 
   @override
@@ -368,7 +356,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         Text(
                           _secondsToHold == 0 ? "Faça o movimento para:" : "Faça o sinal para:",
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 14,
                           ),
                         ),
@@ -379,7 +367,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             fontSize: 42,
                             fontWeight: FontWeight.w900,
                             shadows: [
-                              Shadow(color: neonGreen.withOpacity(0.6), blurRadius: 15),
+                              Shadow(color: neonGreen.withValues(alpha: 0.6), blurRadius: 15),
                             ],
                           ),
                         ),
@@ -400,7 +388,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: statusColor.withOpacity(_isCorrect ? 0.5 : 0.2),
+                              color: statusColor.withValues(alpha: _isCorrect ? 0.5 : 0.2),
                               blurRadius: 20,
                               spreadRadius: 2,
                             ),
@@ -439,7 +427,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       decoration: BoxDecoration(
                         color: cardDark,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                       ),
                       child: Column(
                         children: [
@@ -458,7 +446,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             Text(
                               "MANTENHA O SINAL",
                               style: TextStyle(
-                                color: neonOrange.withOpacity(0.8),
+                                color: neonOrange.withValues(alpha: 0.8),
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.2,
@@ -482,7 +470,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 Text(
                                   "/ ${_secondsToHold}s",
                                   style: TextStyle(
-                                    color: neonOrange.withOpacity(0.6),
+                                    color: neonOrange.withValues(alpha: 0.6),
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                     height: 1.2,
@@ -496,7 +484,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               child: LinearProgressIndicator(
                                 value: (_secondsHeld + 1) / (_secondsToHold == 0 ? 1 : _secondsToHold),
                                 minHeight: 8,
-                                backgroundColor: neonOrange.withOpacity(0.2),
+                                backgroundColor: neonOrange.withValues(alpha: 0.2),
                                 color: neonOrange,
                               ),
                             ),
@@ -511,7 +499,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 fontWeight: FontWeight.bold,
                                 color: _detectedGesture != "Nenhum"
                                     ? Colors.white
-                                    : Colors.white.withOpacity(0.4),
+                                    : Colors.white.withValues(alpha: 0.4),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -540,14 +528,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             child: ElevatedButton.icon(
                               icon: Icon(
                                 _isCorrect ? Icons.check_circle : Icons.lock,
-                                color: _isCorrect ? Colors.black : Colors.white.withOpacity(0.5),
+                                color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
                               ),
                               label: Text(
                                 _isCorrect ? 'CONCLUIR LIÇÃO (+10 XP)' : 'Acerte o sinal para liberar',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: _isCorrect ? Colors.black : Colors.white.withOpacity(0.5),
+                                  color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
                                 ),
                               ),
                               onPressed: _isCorrect ? _saveProgress : null,
@@ -558,7 +546,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
-                                    color: _isCorrect ? Colors.transparent : Colors.white.withOpacity(0.1),
+                                    color: _isCorrect ? Colors.transparent : Colors.white.withValues(alpha: 0.1),
                                   ),
                                 ),
                               ),

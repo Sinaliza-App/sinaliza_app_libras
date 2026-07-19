@@ -63,10 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
         await _storage.write(key: 'user_email', value: userData['email']);
         // ---------------------------------------------
 
-        Provider.of<UserProvider>(context, listen: false).setUser(userData);
+        if (!mounted) return;
 
-        // 4. Salve o token com segurança no dispositivo
-        await _storage.write(key: 'jwt_token', value: token);
         Provider.of<UserProvider>(context, listen: false).setUser(userData);
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -157,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       constraints: const BoxConstraints(maxWidth: 420),
                       padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
                       decoration: BoxDecoration(
-                        color: cardDark.withOpacity(0.96),
+                        color: cardDark.withValues(alpha: 0.96),
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
@@ -175,9 +173,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 72,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: neonGreen.withOpacity(0.08),
+                              color: neonGreen.withValues(alpha: 0.08),
                               border: Border.all(
-                                color: neonGreen.withOpacity(0.3),
+                                color: neonGreen.withValues(alpha: 0.3),
                                 width: 1.5,
                               ),
                             ),
@@ -199,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             'Acesse sua conta para continuar',
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.white.withOpacity(0.6),
+                              color: Colors.white.withValues(alpha: 0.6),
                             ),
                           ),
 
@@ -212,13 +210,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'E-mail',
                               labelStyle: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               filled: true,
                               fillColor: inputDark,
                               prefixIcon: Icon(
                                 Icons.email_outlined,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -239,13 +237,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'Senha',
                               labelStyle: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               filled: true,
                               fillColor: inputDark,
                               prefixIcon: Icon(
                                 Icons.lock_outline,
-                                color: Colors.white.withOpacity(0.7),
+                                color: Colors.white.withValues(alpha: 0.7),
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -298,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextSpan(
                                 text: 'Não tem uma conta? ',
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                   fontSize: 13,
                                 ),
                                 children: const [

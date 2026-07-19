@@ -6,12 +6,14 @@ class UserModel {
   final String name;
   final String email;
   final int totalScore; // <--- NOVO CAMPO
+  final String? profilePicture;
 
   UserModel({
     required this.id, 
     required this.name, 
     required this.email,
     required this.totalScore, // <--- NOVO CAMPO
+    this.profilePicture,
   });
 
   // Factory para converter o JSON da API em um objeto UserModel
@@ -22,6 +24,7 @@ class UserModel {
       email: json['email'],
       // Garante que o score seja lido como int, mesmo se vier null ou string
       totalScore: int.parse(json['total_score']?.toString() ?? '0'),
+      profilePicture: json['profile_picture'],
     );
   }
 }
@@ -42,7 +45,6 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
   
-  // Função auxiliar para adicionar pontos localmente (opcional, para feedback instantâneo)
   void addScore(int points) {
     if (_user != null) {
       _user = UserModel(
@@ -50,6 +52,7 @@ class UserProvider with ChangeNotifier {
         name: _user!.name,
         email: _user!.email,
         totalScore: _user!.totalScore + points,
+        profilePicture: _user!.profilePicture,
       );
       notifyListeners();
     }

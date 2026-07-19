@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:flutter/cupertino.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   // Garante que o Flutter esteja pronto antes de rodar código
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Sinaliza App',
       
       // CONFIGURAÇÃO DO TEMA E ANIMAÇÕES
@@ -42,8 +45,8 @@ class MyApp extends StatelessWidget {
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             // Usa a transição de "Slide" (deslizar) em todas as plataformas móveis
-            TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
-            TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           },
         ),
         // -----------------------------------------------

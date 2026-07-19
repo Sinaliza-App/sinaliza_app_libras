@@ -43,7 +43,7 @@ class LessonInstructionScreen extends StatelessWidget {
           children: [
             Text(
               "INSTRUÇÕES DA LIÇÃO",
-              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 20,fontWeight: FontWeight.w500,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 20,fontWeight: FontWeight.w500,
               letterSpacing: 1.5,),
               textAlign: TextAlign.center,
               

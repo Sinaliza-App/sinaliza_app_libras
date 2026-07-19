@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
+import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'dart:convert';
 
 // Imports do seu projeto
@@ -80,10 +82,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final String apiUrl = '$apiBaseUrl/users/me';
     try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await ApiService.get(apiUrl);
 
       if (!mounted) return;
 
@@ -103,6 +102,73 @@ class _ProfilePageState extends State<ProfilePage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+    );
+
+    if (image == null) return;
+    
+    // Recortar imagem (e comprimir)
+    CroppedFile? croppedFile = await ImageCropper().cropImage(
+      sourcePath: image.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Ajuste sua Foto',
+          toolbarColor: cardDark,
+          toolbarWidgetColor: neonGreen,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: true,
+          hideBottomControls: false,
+          activeControlsWidgetColor: neonGreen,
+          dimmedLayerColor: darkBG.withValues(alpha: 0.8),
+          backgroundColor: darkBG,
+          cropFrameColor: neonGreen,
+          cropGridColor: neonGreen.withValues(alpha: 0.5),
+        ),
+        IOSUiSettings(
+          title: 'Recortar Foto',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+          aspectRatioPickerButtonHidden: true,
+        ),
+      ],
+      compressQuality: 40,
+      maxWidth: 400,
+      maxHeight: 400,
+    );
+
+    if (croppedFile == null) return;
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      final bytes = await croppedFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      
+      final response = await ApiService.put(
+        '$apiBaseUrl/users/me',
+        body: json.encode({'profile_picture': base64Image}),
+      );
+      
+      if (mounted) {
+        if (response.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Foto atualizada!"), backgroundColor: neonGreen));
+          _refreshUserData();
+        } else {
+          debugPrint("Erro ${response.statusCode}: ${response.body}");
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: ${response.statusCode}"), backgroundColor: Colors.red));
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro ao enviar foto: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -144,15 +210,10 @@ class _ProfilePageState extends State<ProfilePage> {
     if (newName == null || newName.trim().isEmpty) return;
 
     setState(() => _isLoading = true);
-    final token = await _storage.read(key: 'jwt_token');
 
     try {
-      final response = await http.put(
-        Uri.parse('$apiBaseUrl/users/me'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token'
-        },
+      final response = await ApiService.put(
+        '$apiBaseUrl/users/me',
         body: json.encode({'name': newName}),
       );
 
@@ -198,13 +259,9 @@ class _ProfilePageState extends State<ProfilePage> {
     if (confirm != true) return;
 
     setState(() => _isLoading = true);
-    final token = await _storage.read(key: 'jwt_token');
     
     try {
-      await http.delete(
-        Uri.parse('$apiBaseUrl/users/me'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      await ApiService.delete('$apiBaseUrl/users/me');
       
       if (mounted) _logout(context);
       
@@ -219,7 +276,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _logout(BuildContext context) async {
     await _storage.delete(key: 'jwt_token');
     
-    if (!mounted) return;
+    if (!context.mounted) return;
     Provider.of<UserProvider>(context, listen: false).clearUser();
 
     Navigator.pushAndRemoveUntil(
@@ -304,21 +361,51 @@ class _ProfilePageState extends State<ProfilePage> {
                             const SizedBox(height: 10),
 
                             // 1. AVATAR
-                            Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color: cardDark,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: neonGreen, width: 3),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: neonGreen.withValues(alpha: 0.4),
-                                    blurRadius: 16,
+                            GestureDetector(
+                              onTap: _pickImage,
+                              child: Stack(
+                                alignment: Alignment.bottomRight,
+                                children: [
+                                  Container(
+                                    width: 120,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      color: cardDark,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: neonGreen, width: 3),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: neonGreen.withValues(alpha: 0.4),
+                                          blurRadius: 16,
+                                        ),
+                                      ],
+                                      image: user?.profilePicture != null && user!.profilePicture!.isNotEmpty
+                                          ? DecorationImage(
+                                              image: MemoryImage(base64Decode(user.profilePicture!)),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null,
+                                    ),
+                                    child: (user?.profilePicture == null || user!.profilePicture!.isEmpty)
+                                        ? const Icon(Icons.person, color: Colors.white, size: 60)
+                                        : null,
+                                  ),
+                                  Container(
+                                    decoration: const BoxDecoration(
+                                      color: neonGreen,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    padding: const EdgeInsets.all(8),
+                                    child: Icon(
+                                      (user?.profilePicture != null && user!.profilePicture!.isNotEmpty)
+                                          ? Icons.edit
+                                          : Icons.camera_alt,
+                                      color: Colors.black,
+                                      size: 20,
+                                    ),
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.person, color: Colors.white, size: 60),
                             ),
 
                             const SizedBox(height: 22),

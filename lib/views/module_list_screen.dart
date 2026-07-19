@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
@@ -53,16 +53,12 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
     const String baseUrl = apiBaseUrl;
 
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/modules'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await ApiService.get('$baseUrl/modules');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         return data.cast<Map<String, dynamic>>();
       } else {
-        if (response.statusCode == 401) _logout();
         throw Exception('Erro ao carregar módulos');
       }
     } catch (e) {

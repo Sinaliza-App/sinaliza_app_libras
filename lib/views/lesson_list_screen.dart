@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_instruction_screen.dart';
@@ -57,7 +57,6 @@ class _LessonListScreenState extends State<LessonListScreen> {
     }
 
     const String baseUrl = apiBaseUrl;
-    final headers = {'Authorization': 'Bearer $token'};
 
     try {
       String lessonsUrl = '$baseUrl/lessons';
@@ -66,14 +65,16 @@ class _LessonListScreenState extends State<LessonListScreen> {
       }
 
       final responses = await Future.wait([
-        http.get(Uri.parse(lessonsUrl), headers: headers),
-        http.get(Uri.parse('$baseUrl/progress'), headers: headers),
+        ApiService.get(lessonsUrl),
+        ApiService.get('$baseUrl/progress'),
       ]);
 
-      if (responses[0].statusCode != 200)
+      if (responses[0].statusCode != 200) {
         throw Exception('Erro ao carregar lições');
-      if (responses[1].statusCode != 200)
+      }
+      if (responses[1].statusCode != 200) {
         throw Exception('Erro ao carregar progresso');
+      }
 
       final lessons = (json.decode(responses[0].body) as List)
           .cast<Map<String, dynamic>>();

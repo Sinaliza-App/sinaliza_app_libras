@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
+
+import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart'; // Seu arquivo de IP
 
@@ -12,7 +12,6 @@ class RankingScreen extends StatefulWidget {
 }
 
 class _RankingScreenState extends State<RankingScreen> {
-  final _storage = const FlutterSecureStorage();
   List<dynamic> _ranking = [];
   bool _isLoading = true;
 
@@ -32,15 +31,11 @@ class _RankingScreenState extends State<RankingScreen> {
   }
 
   Future<void> _fetchRanking() async {
-    final token = await _storage.read(key: 'jwt_token');
     // Ajuste o IP conforme necessário
     final url = '$apiBaseUrl/ranking'; 
 
     try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await ApiService.get(url);
 
       if (response.statusCode == 200) {
         if (mounted) {
@@ -184,10 +179,15 @@ class _RankingScreenState extends State<RankingScreen> {
                                     CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.blueGrey,
-                                      child: Text(
-                                        user['name'].toString().substring(0, 1).toUpperCase(),
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                      ),
+                                      backgroundImage: user['profile_picture'] != null && user['profile_picture'].toString().isNotEmpty
+                                          ? MemoryImage(base64Decode(user['profile_picture']))
+                                          : null,
+                                      child: (user['profile_picture'] == null || user['profile_picture'].toString().isEmpty)
+                                          ? Text(
+                                              user['name'].toString().substring(0, 1).toUpperCase(),
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                            )
+                                          : null,
                                     ),
                                     const SizedBox(width: 12),
 
@@ -248,14 +248,19 @@ class _RankingScreenState extends State<RankingScreen> {
             child: CircleAvatar(
               radius: isFirst ? 35 : 25,
               backgroundColor: cardDark,
-              child: Text(
-                user['name'].toString().substring(0, 1).toUpperCase(),
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: isFirst ? 24 : 18,
-                ),
-              ),
+              backgroundImage: user['profile_picture'] != null && user['profile_picture'].toString().isNotEmpty
+                  ? MemoryImage(base64Decode(user['profile_picture']))
+                  : null,
+              child: (user['profile_picture'] == null || user['profile_picture'].toString().isEmpty)
+                  ? Text(
+                      user['name'].toString().substring(0, 1).toUpperCase(),
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isFirst ? 24 : 18,
+                      ),
+                    )
+                  : null,
             ),
           ),
           const SizedBox(height: 8),

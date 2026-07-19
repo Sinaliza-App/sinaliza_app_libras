@@ -28,6 +28,8 @@ class _SplashScreenState extends State<SplashScreen> {
     // 2. Tenta ler o token salvo
     String? token = await _storage.read(key: 'jwt_token');
 
+    if (!mounted) return;
+
     // 3. Decisão:
     if (token != null && token.isNotEmpty) {
       // TEM TOKEN -> Vai direto para a Home (Módulos)
