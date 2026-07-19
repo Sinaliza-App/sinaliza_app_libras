@@ -235,7 +235,17 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                         final String progressText = "${(progress * 100).toInt()}%";
                         
                         // Bloqueio
-                        final bool isLocked = index > 0 && progress == 0;
+                        bool isLocked = false;
+                        if (index > 0) {
+                          final prevModule = modules[index - 1];
+                          final prevTotal = prevModule['total_lessons'] ?? 0;
+                          final prevCompleted = prevModule['completed_lessons'] ?? 0;
+                          
+                          // Tranca se o anterior não estiver 100% concluído
+                          if (prevTotal == 0 || prevCompleted < prevTotal) {
+                            isLocked = true;
+                          }
+                        }
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 20),
@@ -265,6 +275,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                     builder: (context) => LessonListScreen(
                                       moduleId: module['id'],
                                       moduleTitle: module['title'],
+                                      iconName: module['icon_name'],
                                     ),
                                   ),
                                 );

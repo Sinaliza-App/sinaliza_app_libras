@@ -51,7 +51,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   // --- TEMPORIZADOR ---
   DateTime? _firstDetectionTime;
-  final int _secondsToHold = 3;
+  int _secondsToHold = 3;
   int _secondsHeld = 0;
 
   // --- PROGRESSO E EFEITOS ---
@@ -115,6 +115,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     } else {
       _targetGesture = title.split(":").last.trim();
     }
+    
+    // Regra Inteligente: Se for movimento, o usuário ganha instantaneamente (0s).
+    // Se for estático (Alfabeto), ele precisa segurar a pose (3s).
+    bool isMovement = _targetGesture.toLowerCase().contains("movimento") || 
+                      title.toLowerCase().contains("movimento");
+    _secondsToHold = isMovement ? 0 : 3;
   }
 
   @override
@@ -194,18 +200,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
     if (isCurrentlyMatching) {
       if (!_isCorrect) {
-        // Acertou o frame: Ganha 1 ponto (1 segundo)
-        _secondsHeld++;
-        
-        // Mantém a variável preenchida para a UI mostrar "MANTENHA O SINAL"
-        _firstDetectionTime ??= DateTime.now(); 
-
-        // Dá o feedback tátil a cada segundo preenchido
-        if (await Vibration.hasVibrator()) {
-          Vibration.vibrate(duration: 50);
+        if (_firstDetectionTime == null) {
+          _firstDetectionTime = DateTime.now();
+          _secondsHeld = 0;
+        } else {
+          _secondsHeld = DateTime.now().difference(_firstDetectionTime!).inSeconds;
         }
 
-        // Se bateu a meta (ex: 3 segundos)
+        // Se bateu a meta (ex: 3 segundos ou instantâneo)
         if (_secondsHeld >= _secondsToHold) {
           _isCorrect = true;
           _onSuccess();
@@ -213,15 +215,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       }
     } else {
       if (!_isCorrect) {
-        // IA piscou ou o usuário mexeu a mão: perde 1 ponto, mas não zera de uma vez!
-        if (_secondsHeld > 0) {
-          _secondsHeld--;
-        }
-        
-        // Só apaga a UI amarela se os pontos realmente zerarem
-        if (_secondsHeld == 0) {
-          _firstDetectionTime = null;
-        }
+        // IA piscou ou o usuário mexeu a mão: Zera o cronômetro!
+        _firstDetectionTime = null;
+        _secondsHeld = 0;
       }
     }
 
@@ -370,7 +366,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     Column(
                       children: [
                         Text(
-                          "Faça o sinal para:",
+                          _secondsToHold == 0 ? "Faça o movimento para:" : "Faça o sinal para:",
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.7),
                             fontSize: 14,
@@ -378,10 +374,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         ),
                         Text(
                           _targetGesture,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 42,
                             fontWeight: FontWeight.w900,
+                            shadows: [
+                              Shadow(color: neonGreen.withOpacity(0.6), blurRadius: 15),
+                            ],
                           ),
                         ),
                       ],
@@ -495,7 +494,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
-                                value: (_secondsHeld + 1) / _secondsToHold,
+                                value: (_secondsHeld + 1) / (_secondsToHold == 0 ? 1 : _secondsToHold),
                                 minHeight: 8,
                                 backgroundColor: neonOrange.withOpacity(0.2),
                                 color: neonOrange,
@@ -505,7 +504,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             Text(
                               _detectedGesture != "Nenhum"
                                   ? "Detectado: $_detectedGesture"
-                                  : "Aguardando sinal...",
+                                  : (_secondsToHold == 0 ? "Faça o movimento para a câmera..." : "Posicione sua mão na câmera..."),
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
