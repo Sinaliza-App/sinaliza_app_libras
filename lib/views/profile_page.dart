@@ -33,6 +33,40 @@ class _ProfilePageState extends State<ProfilePage> {
   
   static const Color cardDark = Color(0xFF07101F); // Fundo dos cards
 
+  // Lista de conquistas
+  final List<Map<String, dynamic>> _badges = [
+    {
+      'title': 'Aprendiz',
+      'xpRequired': 10,
+      'icon': Icons.star_rounded,
+      'color': neonBlue,
+    },
+    {
+      'title': 'Curioso',
+      'xpRequired': 100,
+      'icon': Icons.visibility,
+      'color': neonGreen,
+    },
+    {
+      'title': 'Dedicado',
+      'xpRequired': 300,
+      'icon': Icons.local_fire_department_rounded,
+      'color': neonRed,
+    },
+    {
+      'title': 'Avançado',
+      'xpRequired': 600,
+      'icon': Icons.workspace_premium_rounded,
+      'color': Colors.amber,
+    },
+    {
+      'title': 'Mestre',
+      'xpRequired': 1100,
+      'icon': Icons.diamond_rounded,
+      'color': Colors.purpleAccent,
+    },
+  ];
+
   Map<String, dynamic> _calculateLevel(int totalScore) {
     int level = 1;
     int nextLevelScore = 100;
@@ -62,6 +96,104 @@ class _ProfilePageState extends State<ProfilePage> {
       'progress': progress.clamp(0.0, 1.0), // Garante entre 0 e 1
     };
   } 
+
+  Widget _buildBadgesGrid(int userXp) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "MINHAS CONQUISTAS",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 16),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 0.8,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: _badges.length,
+          itemBuilder: (context, index) {
+            final badge = _badges[index];
+            final bool isUnlocked = userXp >= badge['xpRequired'];
+            final Color badgeColor = badge['color'];
+            
+            return Container(
+              decoration: BoxDecoration(
+                color: cardDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isUnlocked ? badgeColor.withValues(alpha: 0.5) : Colors.grey.withValues(alpha: 0.2),
+                  width: 1.5,
+                ),
+                boxShadow: isUnlocked
+                    ? [
+                        BoxShadow(
+                          color: badgeColor.withValues(alpha: 0.2),
+                          blurRadius: 15,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        badge['icon'],
+                        color: isUnlocked ? badgeColor : Colors.grey.withValues(alpha: 0.2),
+                        size: 36,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        badge['title'],
+                        style: TextStyle(
+                          color: isUnlocked ? Colors.white : Colors.grey.withValues(alpha: 0.4),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "${badge['xpRequired']} XP",
+                        style: TextStyle(
+                          color: isUnlocked ? badgeColor : Colors.grey.withValues(alpha: 0.3),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!isUnlocked)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Icon(
+                        Icons.lock_rounded,
+                        color: Colors.grey.withValues(alpha: 0.4),
+                        size: 14,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
@@ -537,6 +669,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                 }
                               ),
                             ),
+                            const SizedBox(height: 30),
+
+                            // --- GRID DE CONQUISTAS ---
+                            _buildBadgesGrid(user?.totalScore ?? 0),
                             const SizedBox(height: 40),
 
                             // 4. BOTÃO DE LOGOUT

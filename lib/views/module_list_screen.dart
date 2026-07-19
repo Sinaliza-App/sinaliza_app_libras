@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
@@ -26,8 +26,8 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
   static const Color neonOrange = Color(0xFFFF9900);
 
   // Cores do Degradê
-  static const Color darkBG = Color(0xFF02040A); 
-  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44); 
+  static const Color darkBG = Color(0xFF02040A);
+  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44);
   static const Color cardDark = Color(0xFF07101F);
 
   @override
@@ -53,12 +53,16 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
     const String baseUrl = apiBaseUrl;
 
     try {
-      final response = await ApiService.get('$baseUrl/modules');
+      final response = await http.get(
+        Uri.parse('$baseUrl/modules'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         return data.cast<Map<String, dynamic>>();
       } else {
+        if (response.statusCode == 401) _logout();
         throw Exception('Erro ao carregar módulos');
       }
     } catch (e) {
@@ -81,9 +85,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
     switch (iconName) {
       case 'alphabet':
         return Icons.sort_by_alpha;
-      case 'numbers':
-        return Icons.filter_1; // Ícone de número 1
-      case 'greetings':
+      case 'day to day':
         return Icons.waving_hand; // Mãozinha dando tchau
       case 'family':
         return Icons.family_restroom; // Ícone de família
@@ -121,14 +123,21 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
             children: [
               // ---------------- HEADER (CORRIGIDO) ----------------
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 20,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // 1. ESQUERDA: Logo e Texto
                     Row(
                       children: const [
-                        Icon(Icons.waving_hand_outlined, color: neonGreen, size: 28),
+                        Icon(
+                          Icons.waving_hand_outlined,
+                          color: neonGreen,
+                          size: 28,
+                        ),
                         SizedBox(width: 10),
                         Text(
                           'SINALIZA',
@@ -152,17 +161,21 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            icon: const Icon(Icons.emoji_events, color: Color(0xFFFFD700)), // Dourado
+                            icon: const Icon(
+                              Icons.emoji_events,
+                              color: Color(0xFFFFD700),
+                            ), // Dourado
                             onPressed: () => Navigator.push(
-                              context, 
-                              MaterialPageRoute(builder: (_) => const RankingScreen())
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RankingScreen(),
+                              ),
                             ),
                             tooltip: 'Ranking Global',
                           ),
                         ),
-                        
-                        const SizedBox(width: 12), // Espaço entre botões
 
+                        const SizedBox(width: 12), // Espaço entre botões
                         // Perfil
                         Container(
                           decoration: BoxDecoration(
@@ -172,8 +185,10 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                           child: IconButton(
                             icon: const Icon(Icons.person, color: Colors.white),
                             onPressed: () => Navigator.push(
-                              context, 
-                              MaterialPageRoute(builder: (c) => const ProfilePage())
+                              context,
+                              MaterialPageRoute(
+                                builder: (c) => const ProfilePage(),
+                              ),
                             ),
                             tooltip: 'Perfil',
                           ),
@@ -192,19 +207,33 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                   future: _modulesFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: neonGreen));
+                      return const Center(
+                        child: CircularProgressIndicator(color: neonGreen),
+                      );
                     }
                     if (snapshot.hasError) {
                       return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                            const Icon(
+                              Icons.error_outline,
+                              color: Colors.red,
+                              size: 48,
+                            ),
                             const SizedBox(height: 16),
-                            Text('Erro ao carregar módulos', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                            Text(
+                              'Erro ao carregar módulos',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
+                            ),
                             TextButton(
                               onPressed: _refreshModules,
-                              child: const Text('Tentar Novamente', style: TextStyle(color: neonGreen)),
+                              child: const Text(
+                                'Tentar Novamente',
+                                style: TextStyle(color: neonGreen),
+                              ),
                             ),
                           ],
                         ),
@@ -213,7 +242,12 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
 
                     final modules = snapshot.data!;
                     if (modules.isEmpty) {
-                      return const Center(child: Text('Nenhum módulo encontrado.', style: TextStyle(color: Colors.white)));
+                      return const Center(
+                        child: Text(
+                          'Nenhum módulo encontrado.',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      );
                     }
 
                     return ListView.builder(
@@ -227,16 +261,20 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                         // Progresso
                         final int total = module['total_lessons'] ?? 0;
                         final int completed = module['completed_lessons'] ?? 0;
-                        final double progress = total == 0 ? 0.0 : (completed / total);
-                        final String progressText = "${(progress * 100).toInt()}%";
-                        
+                        final double progress = total == 0
+                            ? 0.0
+                            : (completed / total);
+                        final String progressText =
+                            "${(progress * 100).toInt()}%";
+
                         // Bloqueio
                         bool isLocked = false;
                         if (index > 0) {
                           final prevModule = modules[index - 1];
                           final prevTotal = prevModule['total_lessons'] ?? 0;
-                          final prevCompleted = prevModule['completed_lessons'] ?? 0;
-                          
+                          final prevCompleted =
+                              prevModule['completed_lessons'] ?? 0;
+
                           // Tranca se o anterior não estiver 100% concluído
                           if (prevTotal == 0 || prevCompleted < prevTotal) {
                             isLocked = true;
@@ -249,12 +287,16 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             color: cardDark,
                             borderRadius: BorderRadius.circular(24),
                             border: Border.all(
-                              color: isLocked ? Colors.grey.withValues(alpha: 0.3) : color.withValues(alpha: 0.5),
+                              color: isLocked
+                                  ? Colors.grey.withValues(alpha: 0.3)
+                                  : color.withValues(alpha: 0.5),
                               width: 1.5,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: isLocked ? Colors.black : color.withValues(alpha: 0.08),
+                                color: isLocked
+                                    ? Colors.black
+                                    : color.withValues(alpha: 0.08),
                                 blurRadius: 15,
                                 offset: const Offset(0, 4),
                               ),
@@ -264,31 +306,41 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             color: Colors.transparent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(24),
-                              onTap: isLocked ? null : () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => LessonListScreen(
-                                      moduleId: module['id'],
-                                      moduleTitle: module['title'],
-                                      iconName: module['icon_name'],
-                                    ),
-                                  ),
-                                );
-                                if (mounted) _refreshModules();
-                              },
+                              onTap: isLocked
+                                  ? null
+                                  : () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              LessonListScreen(
+                                                moduleId: module['id'],
+                                                moduleTitle: module['title'],
+                                              ),
+                                        ),
+                                      );
+                                      if (mounted) _refreshModules();
+                                    },
                               child: Padding(
                                 padding: const EdgeInsets.all(24),
                                 child: Row(
                                   children: [
                                     // --- ÍCONE GRANDE (COM HERO) ---
                                     Hero(
-                                      tag: 'module_icon_${module['id']}', // Tag Única
+                                      tag:
+                                          'module_icon_${module['id']}', // Tag Única
                                       child: Container(
-                                        width: 60, height: 60,
+                                        width: 60,
+                                        height: 60,
                                         decoration: BoxDecoration(
-                                          color: isLocked ? Colors.grey.withValues(alpha: 0.1) : color.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(16),
+                                          color: isLocked
+                                              ? Colors.grey.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : color.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                         ),
                                         child: Icon(
                                           isLocked ? Icons.lock : icon,
@@ -297,37 +349,51 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                         ),
                                       ),
                                     ),
-                                    // -------------------------------
 
+                                    // -------------------------------
                                     const SizedBox(width: 20),
 
                                     // Textos
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             "MÓDULO ${index + 1}",
                                             style: TextStyle(
-                                              color: isLocked ? Colors.grey : color,
-                                              fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1,
+                                              color: isLocked
+                                                  ? Colors.grey
+                                                  : color,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 1,
                                             ),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
                                             module['title'],
-                                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                           const SizedBox(height: 4),
 
                                           if (!isLocked) ...[
                                             Padding(
-                                              padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+                                              padding: const EdgeInsets.only(
+                                                top: 8.0,
+                                                bottom: 4.0,
+                                              ),
                                               child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(4),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
                                                 child: LinearProgressIndicator(
                                                   value: progress,
-                                                  backgroundColor: Colors.grey[900],
+                                                  backgroundColor:
+                                                      Colors.grey[900],
                                                   color: color,
                                                   minHeight: 6,
                                                 ),
@@ -335,13 +401,24 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                             ),
                                             Text(
                                               "$completed de $total lições ($progressText)",
-                                              style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.5,
+                                                ),
+                                                fontSize: 11,
+                                              ),
                                             ),
                                           ] else
                                             Text(
                                               module['description'] ?? '',
-                                              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13),
-                                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.6,
+                                                ),
+                                                fontSize: 13,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                         ],
                                       ),
@@ -349,8 +426,16 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
 
                                     if (!isLocked)
                                       Padding(
-                                        padding: const EdgeInsets.only(left: 8.0),
-                                        child: Icon(Icons.arrow_forward_ios_rounded, color: Colors.white.withValues(alpha: 0.3), size: 20),
+                                        padding: const EdgeInsets.only(
+                                          left: 8.0,
+                                        ),
+                                        child: Icon(
+                                          Icons.arrow_forward_ios_rounded,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                          size: 20,
+                                        ),
                                       ),
                                   ],
                                 ),
