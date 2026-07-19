@@ -178,7 +178,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           'image': imageBase64,
           'width': image.width,
           'height': image.height,
-          'stride': plane.bytesPerRow
+          'stride': plane.bytesPerRow,
+          'model_type': _targetGesture.toLowerCase().contains("movimento") || (widget.lesson['title'] ?? '').toString().toLowerCase().contains("movimento") ? 'movimento' : 'alfabeto'
         }));
       } catch (e) {
         debugPrint("Erro no processamento do frame: $e");
