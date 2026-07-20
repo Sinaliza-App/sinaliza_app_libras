@@ -48,6 +48,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   double _detectedConfidence = 0.0;
   bool _isCorrect = false;
   String _targetGesture = "";
+  bool _isMovement = false; // Flag para UI adaptativa
 
   // --- TEMPORIZADOR ---
   DateTime? _firstDetectionTime;
@@ -115,11 +116,11 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       _targetGesture = title.split(":").last.trim();
     }
     
-    // Regra Inteligente: Se for movimento, o usuário ganha instantaneamente (0s).
+    // Regra Inteligente: Se for movimento, o usuário ganha em 1s (pequeno delay).
     // Se for estático (Alfabeto), ele precisa segurar a pose (3s).
-    bool isMovement = _targetGesture.toLowerCase().contains("movimento") || 
-                      title.toLowerCase().contains("movimento");
-    _secondsToHold = isMovement ? 0 : 3;
+    final lessonType = (widget.lesson['type'] ?? 'estatico').toString().toLowerCase();
+    _isMovement = lessonType == 'movimento';
+    _secondsToHold = _isMovement ? 1 : 3;
   }
 
   @override
@@ -184,7 +185,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           'width': image.width,
           'height': image.height,
           'stride': plane.bytesPerRow,
-          'model_type': _targetGesture.toLowerCase().contains("movimento") || (widget.lesson['title'] ?? '').toString().toLowerCase().contains("movimento") ? 'movimento' : 'alfabeto'
+          'model_type': (widget.lesson['type'] ?? 'estatico').toString().toLowerCase() == 'movimento' ? 'movimento' : 'alfabeto'
         }));
       } catch (e) {
         debugPrint("Erro no processamento do frame: $e");
@@ -235,7 +236,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _confettiController.play();
 
     if (await Vibration.hasVibrator()) {
-      Vibration.vibrate(duration: 500);
+      if (_isMovement) {
+        // Vibração dupla para movimento (impacto imediato)
+        Vibration.vibrate(pattern: [0, 150, 100, 150]);
+      } else {
+        // Vibração simples para estático
+        Vibration.vibrate(duration: 500);
+      }
     }
     try {
       await _audioPlayer.play(AssetSource('sounds/success.mp3'));
@@ -444,40 +451,47 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             ),
                           ] else if (_firstDetectionTime != null) ...[
                             Text(
-                              "MANTENHA O SINAL",
+                              _isMovement ? "ANALISANDO MOVIMENTO" : "MANTENHA O SINAL",
                               style: TextStyle(
                                 color: neonOrange.withValues(alpha: 0.8),
-                                fontSize: 12,
+                                fontSize: _isMovement ? 14 : 12,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.2,
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  "${_secondsHeld + 1}",
-                                  style: const TextStyle(
-                                    color: neonOrange,
-                                    fontSize: 46,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1,
+                            if (!_isMovement) ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    "${_secondsHeld + 1}",
+                                    style: const TextStyle(
+                                      color: neonOrange,
+                                      fontSize: 46,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "/ ${_secondsToHold}s",
-                                  style: TextStyle(
-                                    color: neonOrange.withValues(alpha: 0.6),
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    height: 1.2,
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "/ $_secondsToHold s",
+                                    style: TextStyle(
+                                      color: neonOrange.withValues(alpha: 0.8),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.5,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                            ] else ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.0),
+                                child: CircularProgressIndicator(color: neonOrange),
+                              ),
+                            ],
                             const SizedBox(height: 12),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(4),

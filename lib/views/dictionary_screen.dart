@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:sinaliza_app_libras/views/lesson_detail_screen.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
 
@@ -395,10 +396,10 @@ class _DictionaryZoomScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 24.0),
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Câmera/Prática em breve!'),
-                                  backgroundColor: Color(0xFF00FF9D), // neonGreen
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => LessonDetailScreen(lesson: sign),
                                 ),
                               );
                             },

@@ -135,7 +135,6 @@ class _LessonListScreenState extends State<LessonListScreen> {
     final title = (widget.moduleTitle ?? "").toLowerCase();
     if (title.contains('alphabet') || title.contains('alfabeto')) return Icons.sort_by_alpha;
     if (title.contains('day to day') || title.contains('day by day') || title.contains('dia a dia')) return Icons.waving_hand;
-    if (title.contains('family') || title.contains('família')) return Icons.family_restroom;
     if (title.contains('colors') || title.contains('core')) return Icons.palette;
     if (title.contains('animals') || title.contains('animai')) return Icons.pets;
     if (title.contains('verbs') || title.contains('verbo')) return Icons.run_circle_outlined;

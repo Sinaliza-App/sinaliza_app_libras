@@ -89,8 +89,6 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
         return Icons.sort_by_alpha;
       case 'day to day':
         return Icons.waving_hand; // Mãozinha dando tchau
-      case 'family':
-        return Icons.family_restroom; // Ícone de família
       case 'colors':
         return Icons.palette; // Paleta de tintas
       case 'animals':
@@ -320,17 +318,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
 
                         // Bloqueio
                         bool isLocked = false;
-                        if (index > 0) {
-                          final prevModule = modules[index - 1];
-                          final prevTotal = prevModule['total_lessons'] ?? 0;
-                          final prevCompleted =
-                              prevModule['completed_lessons'] ?? 0;
-
-                          // Tranca se o anterior não estiver 100% concluído
-                          if (prevTotal == 0 || prevCompleted < prevTotal) {
-                            isLocked = true;
-                          }
-                        }
+                        // Todos os módulos estão liberados para consulta/prática livre!
 
 
                         return TweenAnimationBuilder<double>(
