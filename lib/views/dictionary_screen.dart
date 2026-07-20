@@ -168,7 +168,6 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                         itemCount: _filteredSigns.length,
                         itemBuilder: (context, index) {
                           final sign = _filteredSigns[index];
-                          
                           return TweenAnimationBuilder<double>(
                             tween: Tween(begin: 0.0, end: 1.0),
                             duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
@@ -190,15 +189,15 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                   ),
                                 );
                               },
-                            child: Container(
+                              child: Container(
                               margin: const EdgeInsets.only(bottom: 16),
                               decoration: BoxDecoration(
-                              color: cardDark,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: neonBlue.withValues(alpha: 0.3),
-                                width: 1.5,
-                              ),
+                                color: cardDark,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: neonBlue.withValues(alpha: 0.3),
+                                  width: 1.5,
+                                ),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.3),
@@ -247,8 +246,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 8),
-                                        Row(
-                                          children: const [
+                                        const Row(
+                                          children: [
                                             Icon(
                                               Icons.touch_app_rounded,
                                               color: neonGreen,

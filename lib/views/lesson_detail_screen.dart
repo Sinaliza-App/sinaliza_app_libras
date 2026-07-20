@@ -253,6 +253,126 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
+  Future<void> _showStreakCelebration(int streak) async {
+    // Tocar um som de fogos / explosão, se houver
+    // await _audioPlayer.play(AssetSource('sounds/streak.mp3'));
+
+    await showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: bgTop.withValues(alpha: 0.95), // Fundo quase opaco
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              // Confetes explosivos
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: ConfettiController(duration: const Duration(seconds: 3))..play(),
+                  blastDirectionality: BlastDirectionality.explosive,
+                  shouldLoop: true,
+                  colors: const [
+                    Colors.deepOrange,
+                    Colors.orange,
+                    Colors.yellow,
+                    neonGreen,
+                  ],
+                  numberOfParticles: 50,
+                  gravity: 0.1,
+                ),
+              ),
+              // Conteúdo central
+              Center(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            color: Colors.deepOrange,
+                            size: 150,
+                            shadows: [
+                              Shadow(
+                                color: Colors.orange,
+                                blurRadius: 40,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            "$streak",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 80,
+                              fontWeight: FontWeight.w900,
+                              height: 1.0,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.deepOrange,
+                                  blurRadius: 20,
+                                )
+                              ],
+                            ),
+                          ),
+                          const Text(
+                            "DIAS CONSECUTIVOS",
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 3,
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                          const Text(
+                            "Você está pegando fogo! 🔥",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 50),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context); // Fecha o dialog
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepOrange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              elevation: 10,
+                              shadowColor: Colors.deepOrange,
+                            ),
+                            child: const Text(
+                              "CONTINUAR",
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _saveProgress() async {
     if (!_isCorrect) return;
 
@@ -272,28 +392,43 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (!mounted) return;
       final responseData = json.decode(response.body);
 
+      final currentStreak = Provider.of<UserProvider>(context, listen: false).user?.streakCount ?? 0;
+      bool showedCelebration = false;
+
       // Atualiza a ofensiva em qualquer caso de sucesso (201 ou 200)
       if (responseData['streak_count'] != null) {
-        Provider.of<UserProvider>(context, listen: false).updateStreak(responseData['streak_count']);
+        final newStreak = responseData['streak_count'];
+        Provider.of<UserProvider>(context, listen: false).updateStreak(newStreak);
+
+        // Se a ofensiva aumentou de verdade (usuário concluiu a primeira lição do dia)
+        if (newStreak > currentStreak) {
+          await _showStreakCelebration(newStreak);
+          showedCelebration = true;
+          if (!mounted) return;
+        }
       }
 
       if (response.statusCode == 201) {
         Provider.of<UserProvider>(context, listen: false).addScore(10);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(responseData['message'] ?? 'Progresso salvo! +10 XP'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        if (!showedCelebration) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(responseData['message'] ?? 'Progresso salvo! +10 XP'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
         Navigator.pop(context, true);
       } else if (response.statusCode == 200 || response.statusCode == 409) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(responseData['message'] ?? 'Você já concluiu esta lição.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        if (!showedCelebration) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(responseData['message'] ?? 'Você já concluiu esta lição.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -304,7 +439,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
     } finally {
       if (mounted) setState(() => _isSavingProgress = false);
     }

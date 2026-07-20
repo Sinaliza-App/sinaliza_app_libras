@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_page.dart';
@@ -42,6 +43,30 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
     setState(() {
       _modulesFuture = _fetchModules();
     });
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    final token = await _storage.read(key: 'jwt_token');
+    if (token == null) return;
+    
+    try {
+      final response = await http.get(
+        Uri.parse('$apiBaseUrl/users/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode == 200) {
+        final userData = json.decode(response.body);
+        if (userData['total_score'] != null) {
+          userData['total_score'] = int.tryParse(userData['total_score'].toString()) ?? 0;
+        }
+        if (mounted) {
+          Provider.of<UserProvider>(context, listen: false).setUser(userData);
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro ao carregar dados do usuário na main: $e");
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchModules() async {
@@ -131,24 +156,29 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // 1. ESQUERDA: Logo e Texto
-                    Row(
-                      children: const [
-                        Icon(
-                          Icons.waving_hand_outlined,
-                          color: neonGreen,
-                          size: 28,
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          'SINALIZA',
-                          style: TextStyle(
+                    Flexible(
+                      child: Row(
+                        children: const [
+                          Icon(
+                            Icons.waving_hand_outlined,
                             color: neonGreen,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
+                            size: 24, // Reduzido de 28
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'SINALIZA',
+                              style: TextStyle(
+                                color: neonGreen,
+                                fontSize: 18, // Reduzido de 22
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.0,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                     // 2. DIREITA: Ícones (Foguinho + Troféu + Dicionário + Perfil)
@@ -189,7 +219,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             );
                           },
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
 
                         // Troféu (Ranking)
                         Container(
@@ -198,9 +228,12 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(),
                             icon: const Icon(
                               Icons.emoji_events,
                               color: Color(0xFFFFD700),
+                              size: 22,
                             ), // Dourado
                             onPressed: () => Navigator.push(
                               context,
@@ -212,7 +245,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                           ),
                         ),
 
-                        const SizedBox(width: 8), // Espaço entre botões
+                        const SizedBox(width: 6), // Espaço entre botões
                         // Dicionário
                         Container(
                           decoration: BoxDecoration(
@@ -220,9 +253,12 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
+                            padding: const EdgeInsets.all(8),
+                            constraints: const BoxConstraints(),
                             icon: const Icon(
                               Icons.menu_book_rounded,
                               color: neonBlue,
+                              size: 22,
                             ),
                             onPressed: () => Navigator.push(
                               context,
@@ -234,7 +270,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                           ),
                         ),
 
-                        const SizedBox(width: 8), // Espaço entre botões
+                        const SizedBox(width: 6), // Espaço entre botões
                         // Perfil
                         Container(
                           decoration: BoxDecoration(
@@ -261,19 +297,34 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                   if (user != null &&
                                       user.profilePicture != null &&
                                       user.profilePicture!.isNotEmpty) {
-                                    return CircleAvatar(
-                                      radius: 18,
-                                      backgroundImage: MemoryImage(
-                                        base64Decode(user.profilePicture!),
-                                      ),
-                                    );
-                                  } else {
-                                    return const CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: Colors.transparent,
-                                      child: Icon(Icons.person, color: Colors.white),
-                                    );
+                                    final Uint8List? imageBytes = () {
+                                      try {
+                                        String base64Str = user.profilePicture!;
+                                        if (base64Str.contains(',')) {
+                                          base64Str = base64Str.split(',').last;
+                                        }
+                                        base64Str = base64Str.replaceAll(RegExp(r'\s+'), '');
+                                        while (base64Str.length % 4 != 0) {
+                                          base64Str += '=';
+                                        }
+                                        return base64Decode(base64Str);
+                                      } catch (e) {
+                                        return null;
+                                      }
+                                    }();
+                                    if (imageBytes != null) {
+                                      return CircleAvatar(
+                                        radius: 18,
+                                        backgroundImage: MemoryImage(imageBytes),
+                                      );
+                                    }
                                   }
+                                  
+                                  return const CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: Colors.transparent,
+                                    child: Icon(Icons.person, color: Colors.white),
+                                  );
                                 },
                               ),
                             ),

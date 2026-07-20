@@ -488,8 +488,21 @@ class _ProfilePageState extends State<ProfilePage> {
                     ? const Center(child: CircularProgressIndicator(color: neonGreen))
                     : SingleChildScrollView(
                         padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          children: [
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 800),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Transform.translate(
+                              offset: Offset(0, 40 * (1 - value)),
+                              child: Opacity(
+                                opacity: value.clamp(0.0, 1.0),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Column(
+                            children: [
                             const SizedBox(height: 10),
 
                             // 1. AVATAR
@@ -511,12 +524,27 @@ class _ProfilePageState extends State<ProfilePage> {
                                           blurRadius: 16,
                                         ),
                                       ],
-                                      image: user?.profilePicture != null && user!.profilePicture!.isNotEmpty
-                                          ? DecorationImage(
-                                              image: MemoryImage(base64Decode(user.profilePicture!)),
+                                      image: () {
+                                        if (user?.profilePicture != null && user!.profilePicture!.isNotEmpty) {
+                                          try {
+                                            String base64Str = user.profilePicture!;
+                                            if (base64Str.contains(',')) {
+                                              base64Str = base64Str.split(',').last;
+                                            }
+                                            base64Str = base64Str.replaceAll(RegExp(r'\s+'), '');
+                                            while (base64Str.length % 4 != 0) {
+                                              base64Str += '=';
+                                            }
+                                            return DecorationImage(
+                                              image: MemoryImage(base64Decode(base64Str)),
                                               fit: BoxFit.cover,
-                                            )
-                                          : null,
+                                            );
+                                          } catch (e) {
+                                            return null;
+                                          }
+                                        }
+                                        return null;
+                                      }(),
                                     ),
                                     child: (user?.profilePicture == null || user!.profilePicture!.isEmpty)
                                         ? const Icon(Icons.person, color: Colors.white, size: 60)
@@ -575,7 +603,79 @@ class _ProfilePageState extends State<ProfilePage> {
                               textAlign: TextAlign.center,
                             ),
 
-                            const SizedBox(height: 40),
+                            const SizedBox(height: 30),
+
+                            // --- NOVO: CARTÃO DE OFENSIVA (FOGUINHO) ---
+                            Builder(
+                              builder: (context) {
+                                final int streak = user?.streakCount ?? 0;
+                                final bool isLit = streak > 0;
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: isLit 
+                                          ? [Colors.deepOrange.withValues(alpha: 0.2), Colors.orange.withValues(alpha: 0.05)]
+                                          : [Colors.grey.withValues(alpha: 0.1), cardDark],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                      color: isLit ? Colors.deepOrange.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.1),
+                                      width: 1.5
+                                    ),
+                                    boxShadow: isLit ? [
+                                      BoxShadow(
+                                        color: Colors.deepOrange.withValues(alpha: 0.15),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ] : [],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.local_fire_department_rounded,
+                                        color: isLit ? Colors.deepOrange : Colors.grey,
+                                        size: 50,
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              isLit ? "$streak DIAS SEGUIDOS!" : "0 DIAS",
+                                              style: TextStyle(
+                                                color: isLit ? Colors.orange : Colors.grey,
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 1.0,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              isLit 
+                                                ? "Você está pegando fogo! Continue assim." 
+                                                : "Faça uma lição hoje para acender sua ofensiva!",
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(alpha: 0.7),
+                                                fontSize: 13,
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                            ),
+
+                            const SizedBox(height: 20),
 
                             // 3. CARD DE NÍVEL E XP (ATUALIZADO)
                             Container(
@@ -711,6 +811,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ],
                         ),
                       ),
+                    ),
               ),
             ],
           ),
