@@ -5,7 +5,7 @@ import 'package:sinaliza_app_libras/views/splash_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:flutter/cupertino.dart';
-
+import 'package:sinaliza_app_libras/theme/app_theme.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
@@ -36,20 +36,13 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       title: 'Sinaliza App',
       
-      // CONFIGURAÇÃO DO TEMA E ANIMAÇÕES
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF00FF9D)), // Seu verde neon
-        useMaterial3: true,
-        
-        // --- AQUI ESTÁ O SEGREDO DA TRANSIÇÃO FLUIDA ---
+      theme: AppTheme.darkTheme.copyWith(
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
-            // Usa a transição de "Slide" (deslizar) em todas as plataformas móveis
             TargetPlatform.android: CupertinoPageTransitionsBuilder(),
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           },
         ),
-        // -----------------------------------------------
       ),
       
       debugShowCheckedModeBanner: false, // Remove a faixa "DEBUG"

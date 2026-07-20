@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:typed_data';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
+import 'package:sinaliza_app_libras/widgets/animations/neon_pulse.dart';
+import 'package:flutter/services.dart';
 import 'package:sinaliza_app_libras/views/ranking_screen.dart';
 import 'package:sinaliza_app_libras/views/dictionary_screen.dart';
 import 'package:provider/provider.dart';
@@ -21,17 +25,6 @@ class ModuleListScreen extends StatefulWidget {
 class _ModuleListScreenState extends State<ModuleListScreen> {
   final _storage = const FlutterSecureStorage();
   late Future<List<Map<String, dynamic>>> _modulesFuture;
-
-  // Cores do Tema
-  static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color neonPurple = Color(0xFF7A5CFF);
-  static const Color neonBlue = Color(0xFF00D1FF);
-  static const Color neonOrange = Color(0xFFFF9900);
-
-  // Cores do Degradê
-  static const Color darkBG = Color(0xFF02040A);
-  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44);
-  static const Color cardDark = Color(0xFF07101F);
 
   @override
   void initState() {
@@ -125,10 +118,6 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
     }
   }
 
-  Color _getModuleColor(int index) {
-    final colors = [neonGreen, neonPurple, neonBlue, neonOrange];
-    return colors[index % colors.length];
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +129,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [darkBG, darkBG2],
+            colors: [AppColors.darkBG, AppColors.darkBG2],
           ),
         ),
         child: SafeArea(
@@ -161,7 +150,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                         children: const [
                           Icon(
                             Icons.waving_hand_outlined,
-                            color: neonGreen,
+                            color: AppColors.neonGreen,
                             size: 24, // Reduzido de 28
                           ),
                           SizedBox(width: 6),
@@ -169,7 +158,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             child: Text(
                               'SINALIZA',
                               style: TextStyle(
-                                color: neonGreen,
+                                color: AppColors.neonGreen,
                                 fontSize: 18, // Reduzido de 22
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 1.0,
@@ -257,7 +246,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             constraints: const BoxConstraints(),
                             icon: const Icon(
                               Icons.menu_book_rounded,
-                              color: neonBlue,
+                              color: AppColors.neonBlue,
                               size: 22,
                             ),
                             onPressed: () => Navigator.push(
@@ -277,7 +266,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             color: Colors.white.withValues(alpha: 0.05),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: neonBlue.withValues(alpha: 0.3),
+                              color: AppColors.neonBlue.withValues(alpha: 0.3),
                               width: 1.5,
                             ),
                           ),
@@ -345,7 +334,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(
-                        child: CircularProgressIndicator(color: neonGreen),
+                        child: CircularProgressIndicator(color: AppColors.neonGreen),
                       );
                     }
                     if (snapshot.hasError) {
@@ -369,7 +358,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                               onPressed: _refreshModules,
                               child: const Text(
                                 'Tentar Novamente',
-                                style: TextStyle(color: neonGreen),
+                                style: TextStyle(color: AppColors.neonGreen),
                               ),
                             ),
                           ],
@@ -387,12 +376,12 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                       );
                     }
 
-                    return ListView.builder(
+return ListView.builder(
                       padding: const EdgeInsets.all(20),
                       itemCount: modules.length,
                       itemBuilder: (context, index) {
                         final module = modules[index];
-                        final color = _getModuleColor(index);
+                        final color = [AppColors.neonGreen, AppColors.neonPurple, AppColors.neonBlue, AppColors.neonOrange][index % 4];
                         final icon = _getModuleIcon(module['icon_name']);
 
                         // Progresso
@@ -404,22 +393,12 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                         final String progressText =
                             "${(progress * 100).toInt()}%";
 
-                        // Bloqueio
-                        return TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: Duration(milliseconds: 400 + (index * 100).clamp(0, 600)),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, value, child) {
-                            return Transform.translate(
-                              offset: Offset(0, 50 * (1 - value)),
-                              child: Opacity(
-                                opacity: value,
-                                child: child,
-                              ),
-                            );
-                          },
+                        return FadeInSlide(
+                          duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
+                          yOffset: 20.0,
                           child: GestureDetector(
                             onTap: () async {
+                              HapticFeedback.lightImpact();
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -435,7 +414,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 20),
                               decoration: BoxDecoration(
-                                color: cardDark,
+                                color: AppColors.cardDark,
                                 borderRadius: BorderRadius.circular(24),
                                 border: Border.all(
                                   color: color.withValues(alpha: 0.5),
@@ -455,23 +434,13 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                   children: [
                                     // --- ÍCONE GRANDE (COM HERO) ---
                                     Hero(
-                                      tag:
-                                          'module_icon_${module['id']}', // Tag Única
-                                      child: Container(
-                                        width: 60,
-                                        height: 60,
-                                        decoration: BoxDecoration(
-                                          color: color.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          icon,
-                                          color: color,
-                                          size: 32,
-                                        ),
-                                      ),
+                                      tag: 'module_icon_${module['id']}', // Tag Única
+                                      child: progress == 1.0
+                                          ? NeonPulse(
+                                              neonColor: color,
+                                              child: _buildIconContainer(icon, color),
+                                            )
+                                          : _buildIconContainer(icon, color),
                                     ),
 
                                     // -------------------------------
@@ -560,6 +529,28 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+  Widget _buildIconContainer(IconData icon, Color color) {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.2),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Icon(
+        icon,
+        color: color,
+        size: 35,
       ),
     );
   }

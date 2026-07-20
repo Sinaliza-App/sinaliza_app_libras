@@ -3,7 +3,8 @@ import 'dart:typed_data';
 
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
-import 'package:sinaliza_app_libras/constants.dart'; // Seu arquivo de IP
+import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart'; // Seu arquivo de IP
 
 // Removido controle global obsoleto
 
@@ -26,14 +27,6 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
-  // Cores Neon
-  static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color neonGold = Color(0xFFFFD700);
-  static const Color neonSilver = Color(0xFFE0E0E0); // Prata mais clara
-  static const Color neonBronze = Color(0xFFCD7F32);
-  static const Color cardDark = Color(0xFF0A1223);
-  static const Color bgDark = Color(0xFF02040A);
-  static const Color bgDark2 = Color.fromARGB(255, 7, 19, 44);
 
   @override
   void initState() {
@@ -81,10 +74,10 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
 
   // --- LOGICA DAS LIGAS ---
   Color _getLeagueColor(int score) {
-    if (score >= 1100) return Colors.cyanAccent; // Diamante
-    if (score >= 600) return neonGold; // Ouro
-    if (score >= 300) return neonSilver; // Prata
-    return neonBronze; // Bronze
+    if (score >= 1100) return AppColors.diamond; // Diamante
+    if (score >= 600) return AppColors.neonGold; // Ouro
+    if (score >= 300) return AppColors.neonSilver; // Prata
+    return AppColors.neonBronze; // Bronze
   }
 
   IconData _getLeagueIcon(int score) {
@@ -141,7 +134,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
         ),
         title: const Text(
           "RANKING GLOBAL",
-          style: TextStyle(color: neonGreen, fontWeight: FontWeight.bold, letterSpacing: 2),
+          style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold, letterSpacing: 2),
         ),
         centerTitle: true,
       ),
@@ -152,11 +145,11 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [bgDark, bgDark2],
+            colors: [AppColors.darkBG, AppColors.darkBG2],
           ),
         ),
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: neonGreen))
+            ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
             : _ranking.isEmpty
                 ? const Center(child: Text("Nenhum aluno pontuou ainda.", style: TextStyle(color: Colors.white)))
                 : Column(
@@ -178,7 +171,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                   _buildPodiumPlace(
                                     user: _ranking[1],
                                     position: 2,
-                                    color: neonSilver,
+                                    color: AppColors.neonSilver,
                                     height: 140,
                                   ),
                                 
@@ -186,7 +179,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                 _buildPodiumPlace(
                                   user: _ranking[0],
                                   position: 1,
-                                  color: neonGold,
+                                  color: AppColors.neonGold,
                                   height: 180,
                                   isFirst: true,
                                 ),
@@ -196,7 +189,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                   _buildPodiumPlace(
                                     user: _ranking[2],
                                     position: 3,
-                                    color: neonBronze,
+                                    color: AppColors.neonBronze,
                                     height: 110,
                                   ),
                               ],
@@ -210,7 +203,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                       Expanded(
                         child: Container(
                           decoration: const BoxDecoration(
-                            color: cardDark,
+                            color: AppColors.cardDark,
                             borderRadius: BorderRadius.only(
                               topLeft: Radius.circular(30),
                               topRight: Radius.circular(30),
@@ -388,7 +381,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
             children: [
               // Coroa para o 1º lugar
               if (isFirst) 
-                 const Icon(Icons.emoji_events, color: neonGold, size: 40),
+                 const Icon(Icons.emoji_events, color: AppColors.neonGold, size: 40),
               
               const SizedBox(height: 8),
 
@@ -419,7 +412,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                     ),
                     child: CircleAvatar(
                       radius: isFirst ? 35 : 25,
-                      backgroundColor: cardDark,
+                      backgroundColor: AppColors.cardDark,
                       backgroundImage: imageBytes != null ? MemoryImage(imageBytes) : null,
                       child: imageBytes == null ? fallbackText : null,
                     ),
@@ -459,7 +452,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
             ),
             border: Border.all(
               color: color.withValues(alpha: 0.5),
-              width: 1.5,
+              width: 1.5 * entranceValue.clamp(0.0, 1.0),
             ),
             gradient: LinearGradient(
               begin: Alignment.topCenter,

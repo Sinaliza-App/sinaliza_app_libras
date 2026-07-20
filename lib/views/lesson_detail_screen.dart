@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
 import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -28,15 +29,6 @@ class LessonDetailScreen extends StatefulWidget {
 }
 
 class _LessonDetailScreenState extends State<LessonDetailScreen> {
-  // --- PALETA DE CORES NEON ---
-  static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color neonOrange = Color(0xFFFF9900);
-
-  // --- CORES DO DEGRADÊ DE FUNDO ---
-  static const Color bgTop = Color(0xFF02040A);
-  static const Color bgBottom = Color.fromARGB(255, 7, 19, 44);
-  static const Color cardDark = Color(0xFF0A1223);
-
   // --- CÂMERA E INFERÊNCIA WEBSOCKET ---
   CameraController? _cameraController;
   bool _isCameraReady = false;
@@ -260,7 +252,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     await showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: bgTop.withValues(alpha: 0.95), // Fundo quase opaco
+      barrierColor: AppColors.darkBG.withValues(alpha: 0.95), // Fundo quase opaco
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Scaffold(
@@ -275,10 +267,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                   blastDirectionality: BlastDirectionality.explosive,
                   shouldLoop: true,
                   colors: const [
-                    Colors.deepOrange,
-                    Colors.orange,
-                    Colors.yellow,
-                    neonGreen,
+                    AppColors.neonGreen,
+                    AppColors.neonBlue,
+                    AppColors.neonPurple,
+                    AppColors.neonOrange,
                   ],
                   numberOfParticles: 50,
                   gravity: 0.1,
@@ -346,14 +338,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               Navigator.pop(context); // Fecha o dialog
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepOrange,
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppColors.neonGreen,
+                              foregroundColor: Colors.black,
                               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(30),
                               ),
                               elevation: 10,
-                              shadowColor: Colors.deepOrange,
                             ),
                             child: const Text(
                               "CONTINUAR",
@@ -446,8 +437,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   Color _getStatusColor() {
-    if (_isCorrect) return neonGreen;
-    if (_firstDetectionTime != null) return neonOrange;
+    if (_isCorrect) return AppColors.neonGreen;
+    if (_firstDetectionTime != null) return AppColors.neonOrange;
     return Colors.white.withValues(alpha: 0.2);
   }
 
@@ -464,7 +455,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [bgTop, bgBottom],
+            colors: [AppColors.darkBG, AppColors.darkBG2],
           ),
         ),
         child: SafeArea(
@@ -489,7 +480,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               lessonTitle,
                               textAlign: TextAlign.center,
                               style: const TextStyle(
-                                color: neonGreen,
+                                color: AppColors.neonGreen,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 20,
                               ),
@@ -517,7 +508,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             fontSize: 42,
                             fontWeight: FontWeight.w900,
                             shadows: [
-                              Shadow(color: neonGreen.withValues(alpha: 0.6), blurRadius: 15),
+                              Shadow(color: AppColors.neonGreen.withValues(alpha: 0.6), blurRadius: 15),
                             ],
                           ),
                         ),
@@ -564,7 +555,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                   },
                                 )
                               : const Center(
-                                  child: CircularProgressIndicator(color: neonGreen),
+                                  child: CircularProgressIndicator(color: AppColors.neonGreen),
                                 ),
                         ),
                       ),
@@ -575,28 +566,28 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       margin: const EdgeInsets.only(top: 20),
                       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
                       decoration: BoxDecoration(
-                        color: cardDark,
+                        color: AppColors.cardDark,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                       ),
                       child: Column(
                         children: [
                           if (_isCorrect) ...[
-                            const Icon(Icons.celebration, color: neonGreen, size: 32),
+                            const Icon(Icons.stars, color: AppColors.neonGreen, size: 60),
                             const SizedBox(height: 8),
                             const Text(
                               "PARABÉNS!",
                               style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
-                                color: neonGreen,
+                                color: AppColors.neonGreen,
                               ),
                             ),
                           ] else if (_firstDetectionTime != null) ...[
                             Text(
                               _isMovement ? "ANALISANDO MOVIMENTO" : "MANTENHA O SINAL",
                               style: TextStyle(
-                                color: neonOrange.withValues(alpha: 0.8),
+                                color: AppColors.neonOrange.withValues(alpha: 0.8),
                                 fontSize: _isMovement ? 14 : 12,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.2,
@@ -611,7 +602,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                   Text(
                                     "${_secondsHeld + 1}",
                                     style: const TextStyle(
-                                      color: neonOrange,
+                                      color: AppColors.neonOrange,
                                       fontSize: 46,
                                       fontWeight: FontWeight.w900,
                                       height: 1,
@@ -621,7 +612,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                   Text(
                                     "/ $_secondsToHold s",
                                     style: TextStyle(
-                                      color: neonOrange.withValues(alpha: 0.8),
+                                      color: AppColors.neonOrange.withValues(alpha: 0.8),
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       height: 1.5,
@@ -632,7 +623,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             ] else ...[
                               const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 8.0),
-                                child: CircularProgressIndicator(color: neonOrange),
+                                child: CircularProgressIndicator(color: AppColors.neonOrange),
                               ),
                             ],
                             const SizedBox(height: 12),
@@ -641,8 +632,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               child: LinearProgressIndicator(
                                 value: (_secondsHeld + 1) / (_secondsToHold == 0 ? 1 : _secondsToHold),
                                 minHeight: 8,
-                                backgroundColor: neonOrange.withValues(alpha: 0.2),
-                                color: neonOrange,
+                                backgroundColor: AppColors.neonOrange.withValues(alpha: 0.2),
+                                color: AppColors.neonOrange,
                               ),
                             ),
                           ] else ...[
@@ -666,7 +657,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 value: _detectedConfidence,
                                 minHeight: 8,
                                 backgroundColor: Colors.grey[800],
-                                color: _detectedConfidence > 0.6 ? neonGreen : neonOrange,
+                                color: _detectedConfidence > 0.6 ? AppColors.neonGreen : AppColors.neonOrange,
                               ),
                             ),
                           ],
@@ -678,7 +669,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
                     // Botão
                     _isSavingProgress
-                        ? const Center(child: CircularProgressIndicator(color: neonGreen))
+                        ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
                         : SizedBox(
                             width: double.infinity,
                             height: 56,
@@ -697,8 +688,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               ),
                               onPressed: _isCorrect ? _saveProgress : null,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: neonGreen,
-                                disabledBackgroundColor: cardDark,
+                                backgroundColor: _isCorrect ? AppColors.neonGreen : AppColors.cardDark,
                                 elevation: _isCorrect ? 4 : 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
@@ -720,7 +710,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                   blastDirectionality: BlastDirectionality.explosive,
                   shouldLoop: false,
                   colors: const [
-                    neonGreen,
+                    AppColors.neonGreen,
                     Colors.blue,
                     Colors.pink,
                     Colors.orange,

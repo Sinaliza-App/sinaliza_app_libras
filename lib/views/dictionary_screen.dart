@@ -3,6 +3,8 @@ import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/views/lesson_detail_screen.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
@@ -12,11 +14,6 @@ class DictionaryScreen extends StatefulWidget {
 }
 
 class _DictionaryScreenState extends State<DictionaryScreen> {
-  // Cores Neon (mesmo padrão)
-  static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color neonBlue = Color(0xFF00D1FF);
-  static const Color bgDark = Color(0xFF02040A);
-  static const Color cardDark = Color(0xFF07101F);
 
   List<dynamic> _allSigns = [];
   List<dynamic> _filteredSigns = [];
@@ -85,7 +82,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgDark,
+      backgroundColor: AppColors.darkBG,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -93,7 +90,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
         title: const Text(
           'DICIONÁRIO',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.neonGreen,
             fontWeight: FontWeight.w900,
             letterSpacing: 2,
             fontSize: 22,
@@ -112,10 +109,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: cardDark,
+                fillColor: AppColors.cardDark,
                 hintText: 'Pesquisar sinal (ex: Bom dia)',
                 hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-                prefixIcon: const Icon(Icons.search, color: neonGreen),
+                prefixIcon: const Icon(Icons.search, color: AppColors.neonGreen),
                 suffixIcon: _searchQuery.isNotEmpty 
                     ? IconButton(
                         icon: const Icon(Icons.clear, color: Colors.grey),
@@ -125,11 +122,11 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: neonGreen.withValues(alpha: 0.3)),
+                  borderSide: BorderSide(color: AppColors.neonGreen.withValues(alpha: 0.3)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: neonGreen, width: 2),
+                  borderSide: const BorderSide(color: AppColors.neonGreen, width: 2),
                 ),
               ),
             ),
@@ -138,7 +135,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           // Lista de Sinais
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: neonGreen))
+                ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
                 : _filteredSigns.isEmpty
                     ? Center(
                         child: Column(
@@ -147,7 +144,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                             Icon(
                               _searchQuery.isEmpty ? Icons.menu_book_rounded : Icons.search_off_rounded,
                               size: 80,
-                              color: neonGreen.withValues(alpha: 0.3),
+                              color: AppColors.neonGreen.withValues(alpha: 0.3),
                             ),
                             const SizedBox(height: 20),
                             Text(
@@ -168,18 +165,8 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                         itemCount: _filteredSigns.length,
                         itemBuilder: (context, index) {
                           final sign = _filteredSigns[index];
-                          return TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0.0, end: 1.0),
+                          return FadeInSlide(
                             duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
-                            builder: (context, value, child) {
-                              return Transform.translate(
-                                offset: Offset(0, 30 * (1 - value)),
-                                child: Opacity(
-                                  opacity: value,
-                                  child: child,
-                                ),
-                              );
-                            },
                             child: GestureDetector(
                               onTap: () {
                                 Navigator.push(
@@ -192,10 +179,10 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                               child: Container(
                               margin: const EdgeInsets.only(bottom: 16),
                               decoration: BoxDecoration(
-                                color: cardDark,
+                                color: AppColors.cardDark,
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: neonBlue.withValues(alpha: 0.3),
+                                  color: AppColors.neonBlue.withValues(alpha: 0.3),
                                   width: 1.5,
                                 ),
                               boxShadow: [
@@ -219,7 +206,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                       decoration: BoxDecoration(
                                         color: Colors.white.withValues(alpha: 0.05),
                                         borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(color: neonBlue.withValues(alpha: 0.5)),
+                                        border: Border.all(color: AppColors.neonBlue.withValues(alpha: 0.5)),
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(15),
@@ -250,14 +237,14 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                           children: [
                                             Icon(
                                               Icons.touch_app_rounded,
-                                              color: neonGreen,
+                                              color: AppColors.neonGreen,
                                               size: 16,
                                             ),
                                             SizedBox(width: 6),
                                             Text(
                                               'Sinal Prático',
                                               style: TextStyle(
-                                                color: neonGreen,
+                                                color: AppColors.neonGreen,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -291,16 +278,12 @@ class _DictionaryZoomScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color neonGreen = Color(0xFF00FF9D);
-    const Color darkBG = Color(0xFF02040A);
-    const Color cardDark = Color(0xFF050C1A);
-
     final String title = sign['title'] ?? 'Sem Título';
     final String description = sign['description'] ?? 'Sem descrição disponível.';
     final String? imageUrl = sign['example_image_url'];
 
     return Scaffold(
-      backgroundColor: darkBG,
+      backgroundColor: AppColors.darkBG,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -308,11 +291,11 @@ class _DictionaryZoomScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [darkBG, Color.fromARGB(255, 7, 19, 44)],
+              colors: [AppColors.darkBG, const Color.fromARGB(255, 7, 19, 44)],
             ),
           ),
           child: Padding(
@@ -334,7 +317,7 @@ class _DictionaryZoomScreen extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    color: neonGreen,
+                    color: AppColors.neonGreen,
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                   ),
@@ -346,12 +329,12 @@ class _DictionaryZoomScreen extends StatelessWidget {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: cardDark,
+                      color: AppColors.cardDark,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       boxShadow: [
                         BoxShadow(
-                          color: neonGreen.withValues(alpha: 0.05),
+                          color: AppColors.neonGreen.withValues(alpha: 0.05),
                           blurRadius: 30,
                           spreadRadius: 0,
                         )
@@ -402,23 +385,23 @@ class _DictionaryZoomScreen extends StatelessWidget {
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.camera_alt, color: Color(0xFF02040A)), // darkBG
+                            icon: const Icon(Icons.camera_alt, color: AppColors.darkBG),
                             label: const Text(
                               'PRATICAR ESTE SINAL',
                               style: TextStyle(
-                                color: Color(0xFF02040A), // darkBG
+                                color: AppColors.darkBG,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.2,
                               ),
                             ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00FF9D), // neonGreen
+                              backgroundColor: AppColors.neonBlue,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               elevation: 10,
-                              shadowColor: const Color(0xFF00FF9D).withValues(alpha: 0.5),
+                              shadowColor: AppColors.neonBlue.withValues(alpha: 0.5),
                             ),
                           ),
                         ),

@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -22,16 +23,6 @@ class _ProfilePageState extends State<ProfilePage> {
   final _storage = const FlutterSecureStorage();
   bool _isLoading = false;
 
-  // Cores do Tema
-  static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color neonRed = Color(0xFFFF4B4B);
-  static const Color neonBlue = Color(0xFF00D1FF);
-  
-  // --- CORES DO DEGRADÊ (IGUAIS À LESSON LIST) ---
-  static const Color darkBG = Color(0xFF02040A);   // Topo
-  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44);  // Fundo
-  
-  static const Color cardDark = Color(0xFF07101F); // Fundo dos cards
 
   // Lista de conquistas
   final List<Map<String, dynamic>> _badges = [
@@ -39,19 +30,19 @@ class _ProfilePageState extends State<ProfilePage> {
       'title': 'Aprendiz',
       'xpRequired': 10,
       'icon': Icons.star_rounded,
-      'color': neonBlue,
+      'color': AppColors.neonBlue,
     },
     {
       'title': 'Curioso',
       'xpRequired': 100,
       'icon': Icons.visibility,
-      'color': neonGreen,
+      'color': AppColors.neonGreen,
     },
     {
       'title': 'Dedicado',
       'xpRequired': 300,
       'icon': Icons.local_fire_department_rounded,
-      'color': neonRed,
+      'color': AppColors.neonRed,
     },
     {
       'title': 'Avançado',
@@ -128,7 +119,7 @@ class _ProfilePageState extends State<ProfilePage> {
             
             return Container(
               decoration: BoxDecoration(
-                color: cardDark,
+                color: AppColors.cardDark,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isUnlocked ? badgeColor.withValues(alpha: 0.5) : Colors.grey.withValues(alpha: 0.2),
@@ -252,16 +243,16 @@ class _ProfilePageState extends State<ProfilePage> {
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: 'Ajuste sua Foto',
-          toolbarColor: cardDark,
-          toolbarWidgetColor: neonGreen,
+          toolbarColor: AppColors.cardDark,
+          toolbarWidgetColor: AppColors.neonGreen,
           initAspectRatio: CropAspectRatioPreset.square,
           lockAspectRatio: true,
           hideBottomControls: false,
-          activeControlsWidgetColor: neonGreen,
-          dimmedLayerColor: darkBG.withValues(alpha: 0.8),
-          backgroundColor: darkBG,
-          cropFrameColor: neonGreen,
-          cropGridColor: neonGreen.withValues(alpha: 0.5),
+          activeControlsWidgetColor: AppColors.neonGreen,
+          dimmedLayerColor: AppColors.darkBG.withValues(alpha: 0.8),
+          backgroundColor: AppColors.darkBG,
+          cropFrameColor: AppColors.neonGreen,
+          cropGridColor: AppColors.neonGreen.withValues(alpha: 0.5),
         ),
         IOSUiSettings(
           title: 'Recortar Foto',
@@ -290,7 +281,7 @@ class _ProfilePageState extends State<ProfilePage> {
       
       if (mounted) {
         if (response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Foto atualizada!"), backgroundColor: neonGreen));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Foto atualizada!"), backgroundColor: AppColors.neonGreen));
           _refreshUserData();
         } else {
           debugPrint("Erro ${response.statusCode}: ${response.body}");
@@ -312,17 +303,17 @@ class _ProfilePageState extends State<ProfilePage> {
     final newName = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cardDark,
+        backgroundColor: AppColors.cardDark,
         title: const Text("Alterar Nome", style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: nameCtrl,
           style: const TextStyle(color: Colors.white),
-          cursorColor: neonGreen,
+          cursorColor: AppColors.neonGreen,
           decoration: const InputDecoration(
             labelText: "Novo Nome",
             labelStyle: TextStyle(color: Colors.grey),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: neonGreen)),
-            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: neonBlue)),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.neonGreen)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.neonBlue)),
           ),
         ),
         actions: [
@@ -332,7 +323,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, nameCtrl.text),
-            style: ElevatedButton.styleFrom(backgroundColor: neonGreen, foregroundColor: Colors.black),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonGreen, foregroundColor: Colors.black),
             child: const Text("Salvar"),
           ),
         ],
@@ -351,7 +342,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (mounted) {
         if (response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nome atualizado!"), backgroundColor: neonGreen));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nome atualizado!"), backgroundColor: AppColors.neonGreen));
           _refreshUserData();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nome já existente."), backgroundColor: Colors.red));
@@ -369,20 +360,20 @@ class _ProfilePageState extends State<ProfilePage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: cardDark,
+        backgroundColor: AppColors.cardDark,
         title: const Text("Excluir Conta?", style: TextStyle(color: Colors.white)),
         content: const Text(
           "Tem certeza? Todo seu progresso e XP serão perdidos para sempre.",
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Colors.grey),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
+            child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("EXCLUIR", style: TextStyle(color: neonRed, fontWeight: FontWeight.bold)),
+            child: const Text("EXCLUIR", style: TextStyle(color: AppColors.neonRed, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -431,7 +422,7 @@ class _ProfilePageState extends State<ProfilePage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [darkBG, darkBG2],
+            colors: [AppColors.darkBG, AppColors.darkBG2],
           ),
         ),
         child: SafeArea(
@@ -459,7 +450,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     const Text(
                       "MEU PERFIL",
                       style: TextStyle(
-                        color: neonGreen, 
+                        color: AppColors.neonGreen, 
                         fontWeight: FontWeight.w800,
                         fontSize: 22,
                         letterSpacing: 1.5,
@@ -469,11 +460,11 @@ class _ProfilePageState extends State<ProfilePage> {
                     // --- AQUI ESTÁ A LIXEIRA (DELETE) ---
                     Container(
                       decoration: BoxDecoration(
-                        color: neonRed.withValues(alpha: 0.1),
+                        color: AppColors.neonRed.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: neonRed),
+                        icon: const Icon(Icons.delete_outline, color: AppColors.neonRed),
                         onPressed: _deleteAccount,
                         tooltip: "Excluir Conta",
                       ),
@@ -485,7 +476,7 @@ class _ProfilePageState extends State<ProfilePage> {
               // --- CONTEÚDO DA TELA ---
               Expanded(
                 child: _isLoading && user == null
-                    ? const Center(child: CircularProgressIndicator(color: neonGreen))
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
                     : SingleChildScrollView(
                         padding: const EdgeInsets.all(16.0),
                         child: TweenAnimationBuilder<double>(
@@ -515,12 +506,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                     width: 120,
                                     height: 120,
                                     decoration: BoxDecoration(
-                                      color: cardDark,
+                                      color: AppColors.cardDark,
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: neonGreen, width: 3),
+                                      border: Border.all(color: AppColors.neonGreen, width: 3),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: neonGreen.withValues(alpha: 0.4),
+                                          color: AppColors.neonGreen.withValues(alpha: 0.4),
                                           blurRadius: 16,
                                         ),
                                       ],
@@ -552,7 +543,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                   Container(
                                     decoration: const BoxDecoration(
-                                      color: neonGreen,
+                                      color: AppColors.neonGreen,
                                       shape: BoxShape.circle,
                                     ),
                                     padding: const EdgeInsets.all(8),
@@ -585,7 +576,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                                 // --- AQUI ESTÁ O LÁPIS (EDITAR) ---
                                 IconButton(
-                                  icon: const Icon(Icons.edit, color: neonBlue, size: 20),
+                                  icon: const Icon(Icons.edit, color: AppColors.neonBlue, size: 20),
                                   onPressed: _editName,
                                   tooltip: "Editar Nome",
                                 )
@@ -617,7 +608,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     gradient: LinearGradient(
                                       colors: isLit 
                                           ? [Colors.deepOrange.withValues(alpha: 0.2), Colors.orange.withValues(alpha: 0.05)]
-                                          : [Colors.grey.withValues(alpha: 0.1), cardDark],
+                                          : [Colors.grey.withValues(alpha: 0.1), AppColors.cardDark],
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                     ),
@@ -682,10 +673,10 @@ class _ProfilePageState extends State<ProfilePage> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
-                                color: cardDark,
+                                color: AppColors.cardDark,
                                 borderRadius: BorderRadius.circular(24),
                                 border: Border.all(
-                                  color: neonBlue.withValues(alpha: 0.3),
+                                  color: AppColors.neonBlue.withValues(alpha: 0.3),
                                   width: 1.5
                                 ),
                                 boxShadow: [
@@ -709,7 +700,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       Text(
                                         "NÍVEL $level",
                                         style: const TextStyle(
-                                          color: neonBlue,
+                                          color: AppColors.neonBlue,
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
                                           letterSpacing: 2,
@@ -752,7 +743,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           value: progress,
                                           minHeight: 12,
                                           backgroundColor: Colors.black,
-                                          color: neonGreen,
+                                          color: AppColors.neonGreen,
                                         ),
                                       ),
                                       
@@ -783,21 +774,21 @@ class _ProfilePageState extends State<ProfilePage> {
                                 height: 60,
                                 width: double.infinity,
                                 decoration: BoxDecoration(
-                                  color: neonRed.withValues(alpha: 0.1),
+                                  color: AppColors.neonRed.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: neonRed.withValues(alpha: 0.5),
+                                    color: AppColors.neonRed.withValues(alpha: 0.5),
                                   ),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: const [
-                                    Icon(Icons.logout_rounded, color: neonRed),
+                                    Icon(Icons.logout_rounded, color: AppColors.neonRed),
                                     SizedBox(width: 12),
                                     Text(
                                       "Sair da Conta",
                                       style: TextStyle(
-                                        color: neonRed,
+                                        color: AppColors.neonRed,
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                       ),

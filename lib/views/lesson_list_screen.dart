@@ -3,6 +3,9 @@ import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sinaliza_app_libras/views/lesson_instruction_screen.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
+import 'package:flutter/services.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart' as login_screen;
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/constants.dart';
@@ -29,14 +32,6 @@ class _LessonListScreenState extends State<LessonListScreen> {
   final _storage = const FlutterSecureStorage();
   late Future<CombinedLessonData> _dataFuture;
 
-  // Paleta Neon e Gradiente
-  static const Color darkBG = Color(0xFF02040A);
-  static const Color darkBG2 = Color.fromARGB(255, 7, 19, 44);
-  static const Color cardDark = Color(0xFF07101F);
-  static const Color neonGreen = Color(0xFF00FF9D);
-  static const Color neonPurple = Color(0xFF7A5CFF);
-  static const Color neonBlue = Color(0xFF00D1FF);
-  static const Color neonOrange = Color(0xFFFF9900);
 
   @override
   void initState() {
@@ -106,12 +101,11 @@ class _LessonListScreenState extends State<LessonListScreen> {
 
   // Lógica visual para combinar com a tela anterior
   Color _getModuleColor() {
-    // Usa o ID para manter a cor consistente com a lista de módulos
     final colors = [
-      neonGreen,
-      const Color.fromARGB(255, 99, 65, 255),
-      neonBlue,
-      neonOrange,
+      AppColors.neonGreen,
+      AppColors.neonPurple,
+      AppColors.neonBlue,
+      AppColors.neonOrange,
     ];
     int index = (widget.moduleId ?? 1) - 1;
     if (index < 0) index = 0;
@@ -152,7 +146,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [darkBG, darkBG2],
+            colors: [AppColors.darkBG, AppColors.darkBG2],
           ),
         ),
         child: SafeArea(
@@ -189,7 +183,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                         color: Colors.white.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: neonBlue.withValues(alpha: 0.3),
+                          color: AppColors.neonBlue.withValues(alpha: 0.3),
                           width: 1.5,
                         ),
                       ),
@@ -287,7 +281,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(
-                        child: CircularProgressIndicator(color: neonGreen),
+                        child: CircularProgressIndicator(color: AppColors.neonGreen),
                       );
                     }
 
@@ -322,21 +316,12 @@ class _LessonListScreenState extends State<LessonListScreen> {
                         final lesson = lessons[index];
                         final bool isDone = completed.contains(lesson["id"]);
 
-                        return TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: Duration(milliseconds: 400 + (index * 100).clamp(0, 600)),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, value, child) {
-                            return Transform.translate(
-                              offset: Offset(0, 50 * (1 - value)),
-                              child: Opacity(
-                                opacity: value,
-                                child: child,
-                              ),
-                            );
-                          },
+                        return FadeInSlide(
+                          duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
+                          yOffset: 20.0,
                           child: GestureDetector(
                             onTap: () async {
+                              HapticFeedback.lightImpact();
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -350,17 +335,17 @@ class _LessonListScreenState extends State<LessonListScreen> {
                               margin: const EdgeInsets.only(bottom: 18),
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color: cardDark,
+                                color: AppColors.cardDark,
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
                                   color: isDone
-                                      ? neonGreen
-                                      : neonPurple.withValues(alpha: 0.3),
+                                      ? AppColors.neonGreen
+                                      : AppColors.neonPurple.withValues(alpha: 0.3),
                                   width: 1.5,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: (isDone ? neonGreen : neonPurple)
+                                    color: (isDone ? AppColors.neonGreen : AppColors.neonPurple)
                                         .withValues(alpha: 0.1),
                                     blurRadius: 12,
                                     spreadRadius: 2,
@@ -371,7 +356,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                                 children: [
                                   Icon(
                                     isDone ? Icons.star : Icons.front_hand,
-                                    color: isDone ? neonGreen : neonPurple,
+                                    color: isDone ? AppColors.neonGreen : AppColors.neonPurple,
                                     size: 32,
                                   ),
                                   const SizedBox(width: 16),
@@ -420,8 +405,8 @@ class _LessonListScreenState extends State<LessonListScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _refreshData,
-        backgroundColor: neonGreen,
-        foregroundColor: darkBG,
+        backgroundColor: AppColors.neonGreen,
+        foregroundColor: AppColors.darkBG,
         child: const Icon(Icons.refresh),
       ),
     );
