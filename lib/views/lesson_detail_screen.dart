@@ -464,6 +464,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final String lessonTitle = widget.lesson['title'] ?? 'Lição';
+    final String? helpImageUrl = widget.lesson['video_url'] ?? widget.lesson['gif_url'] ?? widget.lesson['thumbnail_url'] ?? widget.lesson['example_image_url'];
     final Color statusColor = _getStatusColor();
 
     return Scaffold(
@@ -505,7 +506,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 48),
+                          helpImageUrl != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.help_outline, color: AppColors.neonOrange),
+                                  onPressed: () => _showHelpDialog(context, helpImageUrl),
+                                )
+                              : const SizedBox(width: 48),
                         ],
                       ),
                     ),
@@ -755,6 +761,55 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showHelpDialog(BuildContext context, String imageUrl) {
+    final bool isNetwork = imageUrl.startsWith('http');
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.darkBG2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Como fazer o sinal', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: isNetwork 
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.image_not_supported, color: Colors.grey, size: 100);
+                      },
+                    )
+                  : Image.asset(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.image_not_supported, color: Colors.grey, size: 100);
+                      },
+                    ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Assista ao movimento e tente repeti-lo para a câmera.', 
+                style: TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ENTENDI', style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
     );
   }
 }
