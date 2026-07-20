@@ -11,9 +11,6 @@ import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:sinaliza_app_libras/widgets/animations/neon_pulse.dart';
 import 'package:flutter/services.dart';
-import 'package:sinaliza_app_libras/views/ranking_screen.dart';
-import 'package:sinaliza_app_libras/views/dictionary_screen.dart';
-import 'package:sinaliza_app_libras/views/quiz_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
@@ -267,57 +264,6 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
               Expanded(child: _buildModulesList()),
             ],
           ),
-        ),
-      ),
-      // ---------------- BOTTOM NAVIGATION BAR ----------------
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.cardDark,
-          border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1),
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: 0,
-          onTap: (index) {
-            if (index == 0) return;
-            final screens = <Widget>[
-              const SizedBox(), // placeholder
-              const DictionaryScreen(),
-              const QuizScreen(),
-              const RankingScreen(),
-            ];
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => screens[index]),
-            ).then((_) {
-              if (mounted) _refreshModules();
-            });
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: AppColors.cardDark,
-          selectedItemColor: AppColors.neonGreen,
-          unselectedItemColor: Colors.white38,
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.school_rounded),
-              label: 'Módulos',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.menu_book_rounded),
-              label: 'Dicionário',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.quiz_rounded),
-              label: 'Quiz',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.emoji_events_rounded),
-              label: 'Ranking',
-            ),
-          ],
         ),
       ),
     );

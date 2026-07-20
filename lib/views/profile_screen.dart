@@ -23,6 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _passwordController = TextEditingController();
 
   bool _isSaving = false;
+  bool _obscurePassword = true;
 
   // --- NOVA FUNÇÃO DE VALIDAÇÃO DETALHADA ---
   // Retorna null se a senha for válida, ou a mensagem de erro específica.
@@ -298,7 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                           TextField(
                             controller: _passwordController,
-                            obscureText: true,
+                            obscureText: _obscurePassword,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'Senha',
@@ -310,6 +311,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               prefixIcon: Icon(
                                 Icons.lock_outline,
                                 color: Colors.white.withValues(alpha: 0.7),
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),

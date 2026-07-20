@@ -121,6 +121,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     return Scaffold(
       backgroundColor: AppColors.darkBG,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,

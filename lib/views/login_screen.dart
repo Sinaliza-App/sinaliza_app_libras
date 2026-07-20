@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
-import 'package:sinaliza_app_libras/views/module_list_screen.dart';
+import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_screen.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/constants.dart';
@@ -19,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
   final _storage = const FlutterSecureStorage();
 
   Future<void> _loginUser() async {
@@ -75,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const ModuleListScreen()),
+          MaterialPageRoute(builder: (context) => const MainTabScreen()),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -232,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                           TextField(
                             controller: _passwordController,
-                            obscureText: true,
+                            obscureText: _obscurePassword,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'Senha',
@@ -245,6 +246,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Icons.lock_outline,
                                 color: Colors.white.withValues(alpha: 0.7),
                               ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
                                 borderSide: BorderSide.none,
@@ -254,6 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
+
 
                           const SizedBox(height: 22),
 

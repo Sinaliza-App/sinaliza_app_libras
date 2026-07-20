@@ -9,6 +9,7 @@ import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:confetti/confetti.dart';
+import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -25,6 +26,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   int _score = 0;
   int _correctAnswers = 0;
   bool _isLoading = true;
+  bool _alreadyPlayed = false;
   bool _showIntro = true;
   bool _isQuizFinished = false;
   bool _hasAnswered = false;
@@ -75,6 +77,22 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   // --- Lógica de Dados ---
   Future<void> _fetchAndBuildQuiz() async {
     try {
+      // Verifica o status do quiz diário
+      final statusResponse = await ApiService.get('$apiBaseUrl/quiz/status');
+      if (statusResponse.statusCode == 200) {
+        final statusData = json.decode(statusResponse.body);
+        if (statusData['already_played'] == true) {
+          if (mounted) {
+            setState(() {
+              _alreadyPlayed = true;
+              _isLoading = false;
+            });
+          }
+          return; // Para aqui, não precisa buscar o dicionário
+        }
+      }
+
+      // Se não jogou hoje, busca o dicionário para montar o quiz
       final response = await ApiService.get('$apiBaseUrl/dictionary');
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -91,7 +109,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Poucos sinais com imagem para gerar o quiz.')),
             );
-            Navigator.pop(context);
           }
           return;
         }
@@ -107,7 +124,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Erro de conexão.')),
         );
-        Navigator.pop(context);
       }
     }
   }
@@ -273,11 +289,13 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
           SafeArea(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
-                : _showIntro
-                    ? _buildIntroScreen()
-                    : _isQuizFinished
-                        ? _buildResultScreen()
-                        : _buildQuestionScreen(),
+                : _alreadyPlayed
+                    ? _buildAlreadyPlayedScreen()
+                    : _showIntro
+                        ? _buildIntroScreen()
+                        : _isQuizFinished
+                            ? _buildResultScreen()
+                            : _buildQuestionScreen(),
           ),
           Align(
             alignment: Alignment.topCenter,
@@ -295,6 +313,51 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // --- TELA DE JÁ JOGOU HOJE ---
+  Widget _buildAlreadyPlayedScreen() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: FadeInSlide(
+          duration: const Duration(milliseconds: 600),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: AppColors.neonOrange.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.neonOrange.withValues(alpha: 0.5), width: 2),
+                ),
+                child: const Icon(Icons.check_circle_rounded, color: AppColors.neonOrange, size: 50),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'TUDO CERTO POR HOJE!',
+                style: const TextStyle(
+                  color: AppColors.neonOrange,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Você já completou o seu desafio diário. Descanse um pouco e volte amanhã para manter sua ofensiva e ganhar mais XP!',
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -388,15 +451,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               ),
 
               const SizedBox(height: 16),
-
-              // Botão Voltar
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  'Voltar',
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 16),
-                ),
-              ),
             ],
           ),
         ),
@@ -441,16 +495,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
               const SizedBox(width: 12),
               Expanded(
                 child: ClipRRect(
@@ -810,24 +854,28 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               ),
 
               const SizedBox(height: 32),
+              const Text(
+                'Desafio concluído! Volte amanhã para ganhar mais XP.',
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
 
               Row(
                 children: [
                   Expanded(
                     child: _actionButton(
-                      label: 'JOGAR NOVAMENTE',
-                      color: accentColor,
-                      icon: Icons.replay_rounded,
-                      onPressed: _restartQuiz,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _actionButton(
-                      label: 'VOLTAR',
+                      label: 'VOLTAR AOS MÓDULOS',
                       color: Colors.white24,
                       icon: Icons.arrow_back_rounded,
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        // Hack simples para resetar a navegação para a aba 0 (Módulos)
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (_) => const MainTabScreen(initialIndex: 0)),
+                          (route) => false,
+                        );
+                      },
                     ),
                   ),
                 ],

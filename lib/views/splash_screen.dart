@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sinaliza_app_libras/views/module_list_screen.dart';
+import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 import 'package:sinaliza_app_libras/views/onboarding_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
@@ -51,10 +51,10 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       if (!mounted) return;
-      // TEM TOKEN -> Vai direto para a Home (Módulos)
+      // TEM TOKEN -> Vai direto para a Home (Módulos via MainTabScreen)
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const ModuleListScreen()),
+        MaterialPageRoute(builder: (context) => const MainTabScreen()),
       );
     } else {
       // MUDANÇA: Se não tá logado, manda pro Onboarding em vez do Login direto

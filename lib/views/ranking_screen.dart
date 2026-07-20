@@ -119,19 +119,9 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
     return Scaffold(
       extendBodyBehindAppBar: true, // Faz o degradê ir até o topo
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: Container(
-          margin: const EdgeInsets.only(left: 16),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ),
         title: const Text(
           "RANKING GLOBAL",
           style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold, letterSpacing: 2),
