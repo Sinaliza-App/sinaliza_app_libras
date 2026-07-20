@@ -7,6 +7,7 @@ class UserModel {
   final String email;
   final int totalScore; // <--- NOVO CAMPO
   final String? profilePicture;
+  final int streakCount;
 
   UserModel({
     required this.id, 
@@ -14,6 +15,7 @@ class UserModel {
     required this.email,
     required this.totalScore, // <--- NOVO CAMPO
     this.profilePicture,
+    this.streakCount = 0,
   });
 
   // Factory para converter o JSON da API em um objeto UserModel
@@ -25,6 +27,7 @@ class UserModel {
       // Garante que o score seja lido como int, mesmo se vier null ou string
       totalScore: int.parse(json['total_score']?.toString() ?? '0'),
       profilePicture: json['profile_picture'],
+      streakCount: int.parse(json['streak_count']?.toString() ?? '0'),
     );
   }
 }
@@ -53,6 +56,21 @@ class UserProvider with ChangeNotifier {
         email: _user!.email,
         totalScore: _user!.totalScore + points,
         profilePicture: _user!.profilePicture,
+        streakCount: _user!.streakCount,
+      );
+      notifyListeners();
+    }
+  }
+
+  void updateStreak(int streakCount) {
+    if (_user != null) {
+      _user = UserModel(
+        id: _user!.id,
+        name: _user!.name,
+        email: _user!.email,
+        totalScore: _user!.totalScore,
+        profilePicture: _user!.profilePicture,
+        streakCount: streakCount,
       );
       notifyListeners();
     }

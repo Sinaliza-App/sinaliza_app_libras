@@ -10,6 +10,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/foundation.dart'; // Para o compute()
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
 // --- FUNÇÃO ISOLADA (FORA DA CLASSE) PARA NÃO TRAVAR A UI ---
 String _processFrameInIsolate(Uint8List bytes) {
@@ -270,7 +272,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (!mounted) return;
       final responseData = json.decode(response.body);
 
+      // Atualiza a ofensiva em qualquer caso de sucesso (201 ou 200)
+      if (responseData['streak_count'] != null) {
+        Provider.of<UserProvider>(context, listen: false).updateStreak(responseData['streak_count']);
+      }
+
       if (response.statusCode == 201) {
+        Provider.of<UserProvider>(context, listen: false).addScore(10);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(responseData['message'] ?? 'Progresso salvo! +10 XP'),
@@ -279,10 +287,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           ),
         );
         Navigator.pop(context, true);
-      } else if (response.statusCode == 409) {
+      } else if (response.statusCode == 200 || response.statusCode == 409) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Você já concluiu esta lição.'),
+          SnackBar(
+            content: Text(responseData['message'] ?? 'Você já concluiu esta lição.'),
             backgroundColor: Colors.orange,
           ),
         );

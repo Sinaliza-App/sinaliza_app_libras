@@ -151,9 +151,46 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                       ],
                     ),
 
-                    // 2. DIREITA: Ícones (Troféu + Dicionário + Perfil)
+                    // 2. DIREITA: Ícones (Foguinho + Troféu + Dicionário + Perfil)
                     Row(
                       children: [
+                        // Ofensiva (Foguinho)
+                        Consumer<UserProvider>(
+                          builder: (context, userProvider, child) {
+                            final user = userProvider.user;
+                            final int streak = user?.streakCount ?? 0;
+                            final bool isLit = streak > 0;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isLit ? Colors.deepOrange.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isLit ? Colors.deepOrange.withValues(alpha: 0.5) : Colors.transparent,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.local_fire_department_rounded,
+                                    color: isLit ? Colors.deepOrange : Colors.grey,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$streak',
+                                    style: TextStyle(
+                                      color: isLit ? Colors.deepOrange : Colors.grey,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+
                         // Troféu (Ranking)
                         Container(
                           decoration: BoxDecoration(
@@ -175,7 +212,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                           ),
                         ),
 
-                        const SizedBox(width: 12), // Espaço entre botões
+                        const SizedBox(width: 8), // Espaço entre botões
                         // Dicionário
                         Container(
                           decoration: BoxDecoration(
@@ -197,7 +234,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                           ),
                         ),
 
-                        const SizedBox(width: 12), // Espaço entre botões
+                        const SizedBox(width: 8), // Espaço entre botões
                         // Perfil
                         Container(
                           decoration: BoxDecoration(
@@ -317,10 +354,6 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             "${(progress * 100).toInt()}%";
 
                         // Bloqueio
-                        bool isLocked = false;
-                        // Todos os módulos estão liberados para consulta/prática livre!
-
-
                         return TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: 1.0),
                           duration: Duration(milliseconds: 400 + (index * 100).clamp(0, 600)),
@@ -335,37 +368,31 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             );
                           },
                           child: GestureDetector(
-                            onTap: isLocked
-                                ? null
-                                : () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => LessonListScreen(
-                                          moduleId: module['id'],
-                                          moduleTitle: module['title'],
-                                          iconName: module['icon_name'],
-                                        ),
-                                      ),
-                                    );
-                                    if (mounted) _refreshModules();
-                                  },
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => LessonListScreen(
+                                    moduleId: module['id'],
+                                    moduleTitle: module['title'],
+                                    iconName: module['icon_name'],
+                                  ),
+                                ),
+                              );
+                              if (mounted) _refreshModules();
+                            },
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 20),
                               decoration: BoxDecoration(
                                 color: cardDark,
                                 borderRadius: BorderRadius.circular(24),
                                 border: Border.all(
-                                  color: isLocked
-                                      ? Colors.grey.withValues(alpha: 0.3)
-                                      : color.withValues(alpha: 0.5),
+                                  color: color.withValues(alpha: 0.5),
                                   width: 1.5,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: isLocked
-                                        ? Colors.black
-                                        : color.withValues(alpha: 0.08),
+                                    color: color.withValues(alpha: 0.08),
                                     blurRadius: 15,
                                     offset: const Offset(0, 4),
                                   ),
@@ -383,18 +410,14 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                         width: 60,
                                         height: 60,
                                         decoration: BoxDecoration(
-                                          color: isLocked
-                                              ? Colors.grey.withValues(
-                                                  alpha: 0.1,
-                                                )
-                                              : color.withValues(alpha: 0.1),
+                                          color: color.withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(
                                             16,
                                           ),
                                         ),
                                         child: Icon(
-                                          isLocked ? Icons.lock : icon,
-                                          color: isLocked ? Colors.grey : color,
+                                          icon,
+                                          color: color,
                                           size: 32,
                                         ),
                                       ),
@@ -412,9 +435,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                           Text(
                                             "MÓDULO ${index + 1}",
                                             style: TextStyle(
-                                              color: isLocked
-                                                  ? Colors.grey
-                                                  : color,
+                                              color: color,
                                               fontSize: 12,
                                               fontWeight: FontWeight.bold,
                                               letterSpacing: 1,
@@ -431,7 +452,6 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                           ),
                                           const SizedBox(height: 4),
 
-                                          if (!isLocked) ...[
                                             Padding(
                                               padding: const EdgeInsets.only(
                                                 top: 8.0,
@@ -458,23 +478,11 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                                 fontSize: 11,
                                               ),
                                             ),
-                                          ] else
-                                            Text(
-                                              module['description'] ?? '',
-                                              style: TextStyle(
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.6,
-                                                ),
-                                                fontSize: 13,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
                                         ],
                                       ),
                                     ),
 
-                                    if (!isLocked)
+
                                       Padding(
                                         padding: const EdgeInsets.only(
                                           left: 8.0,
