@@ -251,19 +251,6 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     _startTimer();
   }
 
-  void _restartQuiz() {
-    setState(() {
-      _currentQuestionIndex = 0;
-      _score = 0;
-      _correctAnswers = 0;
-      _isQuizFinished = false;
-      _hasAnswered = false;
-      _selectedAnswerIndex = null;
-      _correctAnswerIndex = null;
-      _questions = _generateQuestions();
-    });
-    _startTimer();
-  }
 
   // --- Resolve a URL da imagem ---
   String _getImageUrl(Map<String, dynamic> sign) {
@@ -340,7 +327,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
               const SizedBox(height: 24),
               const Text(
                 'TUDO CERTO POR HOJE!',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.neonOrange,
                   fontSize: 24,
                   fontWeight: FontWeight.w900,

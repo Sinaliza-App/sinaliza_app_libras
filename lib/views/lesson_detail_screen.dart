@@ -110,11 +110,11 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       _targetGesture = title.split(":").last.trim();
     }
     
-    // Regra Inteligente: Se for movimento, o usuário ganha em 1s (pequeno delay).
+    // Regra Inteligente: Se for movimento, o usuário ganha instantaneamente (0s).
     // Se for estático (Alfabeto), ele precisa segurar a pose (3s).
     final lessonType = (widget.lesson['type'] ?? 'estatico').toString().toLowerCase();
-    _isMovement = lessonType == 'movimento';
-    _secondsToHold = _isMovement ? 1 : 3;
+    _isMovement = lessonType == 'movimento' || lessonType == 'dynamic';
+    _secondsToHold = _isMovement ? 0 : 3;
   }
 
   @override
@@ -188,9 +188,28 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     });
   }
 
+  String _normalizeGesture(String gesture) {
+    // Troca espaços, barras, hifens por underline e converte pra minúsculo (Padrão do Modelo Python)
+    return gesture.toLowerCase()
+        .replaceAll(RegExp(r'[áàâã]'), 'a')
+        .replaceAll(RegExp(r'[éèê]'), 'e')
+        .replaceAll(RegExp(r'[íìî]'), 'i')
+        .replaceAll(RegExp(r'[óòôõ]'), 'o')
+        .replaceAll(RegExp(r'[úùû]'), 'u')
+        .replaceAll(RegExp(r'[ç]'), 'c')
+        .replaceAll(RegExp(r'[\s/|-]+'), '_')
+        .trim();
+  }
+
   // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
  void _handleDetectionResult(String gesture, double confidence) async {
-    bool isCurrentlyMatching = (confidence > 0.6 && gesture == _targetGesture);
+    // Para movimentos confiamos 100% no backend (já que ele filtra a confianca), para estáticos > 0.6
+    String normalizedDetected = _normalizeGesture(gesture);
+    String normalizedTarget = _normalizeGesture(_targetGesture);
+
+    bool isCurrentlyMatching = ((_isMovement || confidence > 0.6) && 
+                                normalizedDetected == normalizedTarget && 
+                                normalizedDetected != "nenhum");
 
     if (isCurrentlyMatching) {
       if (!_isCorrect) {
@@ -637,29 +656,41 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               ),
                             ),
                           ] else ...[
-                            Text(
-                              _detectedGesture != "Nenhum"
-                                  ? "Detectado: $_detectedGesture"
-                                  : (_secondsToHold == 0 ? "Faça o movimento para a câmera..." : "Posicione sua mão na câmera..."),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: _detectedGesture != "Nenhum"
-                                    ? Colors.white
-                                    : Colors.white.withValues(alpha: 0.4),
+                            if (!_isMovement) ...[
+                              Text(
+                                _detectedGesture != "Nenhum"
+                                    ? "Detectado: $_detectedGesture"
+                                    : "Posicione sua mão na câmera...",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: _detectedGesture != "Nenhum"
+                                      ? Colors.white
+                                      : Colors.white.withValues(alpha: 0.4),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: LinearProgressIndicator(
-                                value: _detectedConfidence,
-                                minHeight: 8,
-                                backgroundColor: Colors.grey[800],
-                                color: _detectedConfidence > 0.6 ? AppColors.neonGreen : AppColors.neonOrange,
+                              const SizedBox(height: 12),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                  value: _detectedConfidence,
+                                  minHeight: 8,
+                                  backgroundColor: Colors.grey[800],
+                                  color: _detectedConfidence > 0.6 ? AppColors.neonGreen : AppColors.neonOrange,
+                                ),
                               ),
-                            ),
+                            ] else ...[
+                              Text(
+                                "Faça o movimento para a câmera...",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                ),
+                              ),
+                            ],
                           ],
                         ],
                       ),
