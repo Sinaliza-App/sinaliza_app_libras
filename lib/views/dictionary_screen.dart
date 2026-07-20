@@ -18,6 +18,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   List<dynamic> _allSigns = [];
   List<dynamic> _filteredSigns = [];
   bool _isLoading = true;
+  bool _showFavoritesOnly = false;
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
@@ -70,7 +71,43 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           return title.contains(query.toLowerCase());
         }).toList();
       }
+      
+      if (_showFavoritesOnly) {
+        _filteredSigns = _filteredSigns.where((sign) => sign['is_favorite'] == true).toList();
+      }
     });
+  }
+
+  Future<void> _toggleFavorite(Map<String, dynamic> sign) async {
+    final int signId = sign['id'];
+    try {
+      final response = await ApiService.post('$apiBaseUrl/dictionary/favorite',
+        body: json.encode({'sign_id': signId}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        final bool newFav = data['is_favorite'];
+        
+        setState(() {
+          final indexAll = _allSigns.indexWhere((s) => s['id'] == signId);
+          if (indexAll != -1) _allSigns[indexAll]['is_favorite'] = newFav;
+
+          final indexFiltered = _filteredSigns.indexWhere((s) => s['id'] == signId);
+          if (indexFiltered != -1) _filteredSigns[indexFiltered]['is_favorite'] = newFav;
+
+          if (_showFavoritesOnly && !newFav && indexFiltered != -1) {
+             _filteredSigns.removeAt(indexFiltered);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro ao atualizar favorito.')),
+        );
+      }
+    }
   }
 
   void _clearSearch() {
@@ -97,6 +134,21 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
           ),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _showFavoritesOnly ? Icons.favorite : Icons.favorite_border,
+              color: _showFavoritesOnly ? AppColors.neonRed : Colors.white,
+            ),
+            onPressed: () {
+              setState(() {
+                _showFavoritesOnly = !_showFavoritesOnly;
+              });
+              _filterSigns(_searchQuery);
+            },
+            tooltip: 'Apenas Favoritos',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -253,6 +305,15 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                         ),
                                       ],
                                     ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      sign['is_favorite'] == true ? Icons.favorite : Icons.favorite_border,
+                                      color: sign['is_favorite'] == true ? AppColors.neonRed : Colors.white54,
+                                    ),
+                                    onPressed: () {
+                                      _toggleFavorite(sign);
+                                    },
                                   ),
                                 ],
                               ),
