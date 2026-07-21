@@ -464,7 +464,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final String lessonTitle = widget.lesson['title'] ?? 'Lição';
-    final String? helpImageUrl = widget.lesson['video_url'] ?? widget.lesson['gif_url'] ?? widget.lesson['thumbnail_url'] ?? widget.lesson['example_image_url'];
+    // Prioriza os campos onde o GIF ou animação podem estar armazenados antes de pegar a foto estática
+    final String? helpImageUrl = widget.lesson['gif_url'] ?? widget.lesson['example_image_url'] ?? widget.lesson['video_url'] ?? widget.lesson['thumbnail_url'];
     final Color statusColor = _getStatusColor();
 
     return Scaffold(

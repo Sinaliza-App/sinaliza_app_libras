@@ -98,9 +98,9 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
         final List<dynamic> data = json.decode(response.body);
         final signs = data.cast<Map<String, dynamic>>();
 
-        // Filtra sinais com imagem (thumbnail ou example_image)
+        // Filtra sinais com imagem (gif, example_image ou thumbnail)
         final signsWithImage = signs.where((s) {
-          final url = s['thumbnail_url'] ?? s['example_image_url'];
+          final url = s['gif_url'] ?? s['example_image_url'] ?? s['thumbnail_url'];
           return url != null && url.toString().isNotEmpty;
         }).toList();
 
@@ -254,7 +254,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
 
   // --- Resolve a URL da imagem ---
   String _getImageUrl(Map<String, dynamic> sign) {
-    return (sign['thumbnail_url'] ?? sign['example_image_url'] ?? '').toString();
+    return (sign['gif_url'] ?? sign['example_image_url'] ?? sign['thumbnail_url'] ?? '').toString();
   }
 
   // --- UI ---

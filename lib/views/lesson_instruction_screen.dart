@@ -16,9 +16,9 @@ class LessonInstructionScreen extends StatelessWidget {
     final String title = lesson['title'] ?? 'Lição';
     final String description = lesson['description'] ?? 'Sem descrição disponível.';
     
-    // Se tiver URL de imagem no banco, usamos. Se não, um placeholder.
-    // (No futuro, isso virá do seu backend/assets)
-    final String? imageUrl = lesson['example_image_url'];
+    // Prioriza o gif, depois a imagem de exemplo, depois a thumbnail
+    final String? imageUrl = lesson['gif_url'] ?? lesson['example_image_url'] ?? lesson['thumbnail_url'];
+    final bool isNetwork = imageUrl != null && imageUrl.startsWith('http');
 
     return Scaffold(
       backgroundColor: darkBG,
@@ -79,22 +79,29 @@ class LessonInstructionScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Exibe a imagem do sinal se disponível, senão um ícone placeholder
                     Container(
-                      height: 200,
-                      width: 200,
+                      height: 240,
+                      width: 240,
                       decoration: BoxDecoration(
                         color: Colors.black26,
-                        borderRadius: BorderRadius.circular(1000), // Círculo
+                        borderRadius: BorderRadius.circular(24), // Quadrado arredondado
                       ),
                       child: imageUrl != null && imageUrl.isNotEmpty
-                          ? ClipOval(
-                              child: Image.asset( // <--- MUDANÇA: .asset
-                                imageUrl,
-                                fit: BoxFit.contain, // Garante que a imagem inteira apareça sem cortar
-                                errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(Icons.broken_image, size: 80, color: Colors.white54),
-                              ),
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: isNetwork 
+                                ? Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover, // Para o gif preencher o círculo
+                                    errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.broken_image, size: 80, color: Colors.white54),
+                                  )
+                                : Image.asset( 
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.broken_image, size: 80, color: Colors.white54),
+                                  ),
                             )
                           : const Icon(Icons.front_hand, size: 80, color: Colors.white54),
                     ),
