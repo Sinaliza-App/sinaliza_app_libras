@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // Para banco de dados no 
 import 'package:sinaliza_app_libras/views/splash_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:sinaliza_app_libras/theme/app_theme.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -12,11 +13,17 @@ Future<void> main() async {
   // Garante que o Flutter esteja pronto antes de rodar código
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configuração para rodar banco de dados no Windows/Linux/Mac
+  // Configuração para rodar banco de dados local no Windows/Linux/Mac
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+  
+  // ATENÇÃO: Substitua pelas suas chaves do Supabase!
+  await Supabase.initialize(
+    url: 'https://pkmfssdvdoaicdhfahwg.supabase.co',
+    publishableKey: 'sb_publishable_s-2ep7ZAxxJJC8IQeRfQ0g_v0pQsuA8',
+  );
   
   runApp(
     // Injetamos o UserProvider no topo da árvore para o estado global

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -20,7 +20,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final _storage = const FlutterSecureStorage();
   bool _isLoading = false;
 
 
@@ -196,12 +195,6 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() {
       _isLoading = true;
     });
-
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
 
     final String apiUrl = '$apiBaseUrl/users/me';
     try {
@@ -397,8 +390,6 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _logout(BuildContext context) async {
-    await _storage.delete(key: 'jwt_token');
-    
     if (!context.mounted) return;
     Provider.of<UserProvider>(context, listen: false).clearUser();
 

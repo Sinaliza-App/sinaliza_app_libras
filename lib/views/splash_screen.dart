@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 import 'package:sinaliza_app_libras/views/onboarding_screen.dart';
 import 'package:provider/provider.dart';
@@ -16,7 +16,6 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  final _storage = const FlutterSecureStorage();
 
   @override
   void initState() {
@@ -30,13 +29,13 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    // 2. Tenta ler o token salvo
-    String? token = await _storage.read(key: 'jwt_token');
+    // 2. Verifica se a sessão do Supabase foi restaurada
+    final session = Supabase.instance.client.auth.currentSession;
 
     if (!mounted) return;
 
     // 3. Decisão:
-    if (token != null && token.isNotEmpty) {
+    if (session != null) {
       // Tenta buscar o perfil do usuário para popular o Provider
       try {
         final response = await ApiService.get('$apiBaseUrl/users/me');

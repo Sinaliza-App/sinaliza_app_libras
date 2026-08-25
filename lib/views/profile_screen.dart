@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:sinaliza_app_libras/constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 // import 'package:sinaliza_app_libras/views/login_screen.dart'; // Se precisar voltar
 
 bool _isEmailValid(String email) {
@@ -88,43 +87,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isSaving = true);
 
-    // 3. Configuração da API
-    // ATENÇÃO: Use o IP correto (Radmin ou 10.0.2.2)
-      const String apiUrl = '$apiBaseUrl/users/register';
-
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: json.encode({
-          'name': name,
-          'email': email,
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final AuthResponse res = await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
+        data: {'name': name},
+      );
 
       if (!mounted) return;
 
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 201) {
+      if (res.user != null) {
         // SUCESSO
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(responseData['message'] ?? "Usuário criado com sucesso!"),
+          const SnackBar(
+            content: Text("Usuário criado com sucesso! Verifique seu e-mail."),
             backgroundColor: Colors.green,
           ),
         );
         Navigator.pop(context); 
-      } else {
-        // ERRO DE API
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(responseData['message'] ?? "Erro ao criar usuário."),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: Colors.red,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

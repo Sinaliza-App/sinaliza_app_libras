@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_screen.dart';
+import 'package:sinaliza_app_libras/views/forgot_password_screen.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/constants.dart';
+import 'dart:convert';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  final _storage = const FlutterSecureStorage();
 
   Future<void> _loginUser() async {
     final email = _emailController.text.trim();
@@ -37,41 +37,31 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // 3. Configuração da API
-    final String apiUrl = '$apiBaseUrl/users/login';
     try {
-      final response = await http
-          .post(
-            Uri.parse(apiUrl),
-            headers: {'Content-Type': 'application/json; charset=UTF-8'},
-            body: json.encode({'email': email, 'password': password}),
-          )
-          .timeout(const Duration(seconds: 10));
+      // 1. Faz login no Supabase
+      final AuthResponse res = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (res.session == null) {
+        throw Exception('Sessão não criada. Verifique seu e-mail.');
+      }
 
       if (!mounted) return;
 
-      final responseData = json.decode(response.body);
-
+      // 2. Busca os dados adicionais no backend Node.js (ID numérico, score, etc)
+      // O ApiService já cuida de colocar o Token Bearer do Supabase no cabeçalho
+      final response = await ApiService.get('$apiBaseUrl/users/me');
+      
       if (response.statusCode == 200) {
-        final String token = responseData['token'];
-        final Map<String, dynamic> userData = responseData['user'];
-
-        // ---------------------------------------------
-        // 🔥 SALVANDO DADOS DO USUÁRIO NO STORAGE
-        // ---------------------------------------------
-        await _storage.write(key: 'jwt_token', value: token);
-        await _storage.write(key: 'user_name', value: userData['name']);
-        await _storage.write(key: 'user_email', value: userData['email']);
-        // ---------------------------------------------
-
+        final userData = json.decode(response.body);
+        
         if (!mounted) return;
-
         Provider.of<UserProvider>(context, listen: false).setUser(userData);
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(responseData['message'] ?? 'Login bem-sucedido!'),
-          ),
+          const SnackBar(content: Text('Login bem-sucedido!')),
         );
 
         Navigator.pushReplacement(
@@ -79,27 +69,28 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (context) => const MainTabScreen()),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              responseData['message'] ?? 'E-mail ou senha inválidos.',
-            ),
-          ),
-        );
+        throw Exception('Erro ao buscar dados do perfil. ${response.body}');
       }
+    } on AuthException catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('E-mail ou senha incorretos.')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro de conexão: $e. Verifique se a API está online.'),
-        ),
+        SnackBar(content: Text('Erro: ${e.toString()}')),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
+
+
 
   void _goToRegisterScreen() {
     Navigator.push(
@@ -267,6 +258,28 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
+                          const SizedBox(height: 10),
+                          
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const ForgotPasswordScreen(),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                'Esqueceu sua senha?',
+                                style: TextStyle(
+                                  color: neonGreen.withValues(alpha: 0.8),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ),
 
                           const SizedBox(height: 22),
 

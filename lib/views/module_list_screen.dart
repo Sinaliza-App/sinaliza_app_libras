@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+
 import 'dart:convert';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
@@ -13,6 +13,7 @@ import 'package:sinaliza_app_libras/widgets/animations/neon_pulse.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:sinaliza_app_libras/services/api_service.dart';
 
 class ModuleListScreen extends StatefulWidget {
   const ModuleListScreen({super.key});
@@ -22,9 +23,7 @@ class ModuleListScreen extends StatefulWidget {
 }
 
 class _ModuleListScreenState extends State<ModuleListScreen> {
-  final _storage = const FlutterSecureStorage();
   late Future<List<Map<String, dynamic>>> _modulesFuture;
-
   @override
   void initState() {
     super.initState();
@@ -39,14 +38,8 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
   }
 
   Future<void> _fetchUserData() async {
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) return;
-
     try {
-      final response = await http.get(
-        Uri.parse('$apiBaseUrl/users/me'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await ApiService.get('$apiBaseUrl/users/me');
       if (response.statusCode == 200) {
         final userData = json.decode(response.body);
         if (userData['total_score'] != null) {
@@ -62,17 +55,8 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchModules() async {
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) {
-      _logout();
-      throw Exception('Token não encontrado');
-    }
-
     try {
-      final response = await http.get(
-        Uri.parse('$apiBaseUrl/modules'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await ApiService.get('$apiBaseUrl/modules');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -88,7 +72,6 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
   }
 
   void _logout() async {
-    await _storage.delete(key: 'jwt_token');
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,

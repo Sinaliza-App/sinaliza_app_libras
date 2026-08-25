@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import 'package:sinaliza_app_libras/views/lesson_instruction_screen.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:flutter/services.dart';
-import 'package:sinaliza_app_libras/views/login_screen.dart' as login_screen;
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:provider/provider.dart';
@@ -29,7 +28,6 @@ class LessonListScreen extends StatefulWidget {
 }
 
 class _LessonListScreenState extends State<LessonListScreen> {
-  final _storage = const FlutterSecureStorage();
   late Future<CombinedLessonData> _dataFuture;
 
 
@@ -46,12 +44,6 @@ class _LessonListScreenState extends State<LessonListScreen> {
   }
 
   Future<CombinedLessonData> _fetchLessonsAndProgress() async {
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) {
-      _logout();
-      throw Exception('Token não encontrado. Fazendo logout.');
-    }
-
     const String baseUrl = apiBaseUrl;
 
     try {
@@ -89,15 +81,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
     }
   }
 
-  void _logout() async {
-    await _storage.delete(key: 'jwt_token');
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const login_screen.LoginScreen()),
-      (route) => false,
-    );
-  }
+
 
   // Lógica visual para combinar com a tela anterior
   Color _getModuleColor() {
