@@ -1,15 +1,27 @@
-import 'dart:async'; 
+import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
+
+import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/constants.dart';
+import 'package:confetti/confetti.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:vibration/vibration.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:confetti/confetti.dart'; 
+import 'package:flutter/foundation.dart'; // Para o compute()
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
+
+// --- FUNÇÃO ISOLADA (FORA DA CLASSE) PARA NÃO TRAVAR A UI ---
+String _processFrameInIsolate(Uint8List bytes) {
+  return base64Encode(bytes);
+}
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic> lesson;
+
   const LessonDetailScreen({super.key, required this.lesson});
 
   @override
@@ -17,39 +29,77 @@ class LessonDetailScreen extends StatefulWidget {
 }
 
 class _LessonDetailScreenState extends State<LessonDetailScreen> {
-  // Câmera
+  // --- CÂMERA E INFERÊNCIA WEBSOCKET ---
   CameraController? _cameraController;
-  late Future<void> _initializeControllerFuture;
-  bool _isCameraInitialized = false;
-
-  // WebSocket e Jogo
+  bool _isCameraReady = false;
+  bool _isProcessingFrame = false; // Trava para não afogar o servidor
+  DateTime? _lastFrameTime;
   WebSocketChannel? _channel;
-  StreamSubscription? _streamSubscription;
-  bool _isStreaming = false;
-  
-  // Estado do Jogo
-  String _detectedGesture = "Posicione a mão...";
+  bool _isConnected = false;
+
+  // --- ESTADO DO JOGO ---
+  String _detectedGesture = "Nenhum";
   double _detectedConfidence = 0.0;
-  bool _isCorrect = false; 
-  String _targetGesture = ""; 
+  bool _isCorrect = false;
+  String _targetGesture = "";
+  bool _isMovement = false; // Flag para UI adaptativa
 
-  // Variáveis do Temporizador
-  DateTime? _firstDetectionTime; 
-  final int _secondsToHold = 3;  
-  int _secondsHeld = 0;          
+  // --- TEMPORIZADOR ---
+  DateTime? _firstDetectionTime;
+  int _secondsToHold = 3;
+  int _secondsHeld = 0;
 
-  // Progresso e Efeitos
+  // --- PROGRESSO E EFEITOS ---
   bool _isSavingProgress = false;
-  final _storage = const FlutterSecureStorage();
   late ConfettiController _confettiController;
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   @override
   void initState() {
     super.initState();
-    _extractTargetGesture(); 
+    _extractTargetGesture();
     _initializeCamera();
-    // Confetes duram 2 segundos ao explodir
-    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    _connectWebSocket();
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  void _connectWebSocket() {
+    try {
+      _channel = WebSocketChannel.connect(Uri.parse(wsBaseUrl));
+      _isConnected = true;
+      
+      _channel!.stream.listen(
+        (message) {
+          if (!mounted) return;
+          try {
+            final data = jsonDecode(message);
+            final String gesture = data['prediction'] ?? "Nenhum";
+            final double confidence = (data['confidence'] ?? 0.0).toDouble();
+
+            _handleDetectionResult(gesture, confidence);
+          } catch (e) {
+            debugPrint("Erro ao decodificar resposta do WS: $e");
+          } finally {
+            _isProcessingFrame = false;
+          }
+        },
+        onError: (error) {
+          debugPrint("Erro no WebSocket: $error");
+          _isConnected = false;
+          _isProcessingFrame = false;
+        },
+        onDone: () {
+          debugPrint("WebSocket desconectado");
+          _isConnected = false;
+          _isProcessingFrame = false;
+        },
+      );
+    } catch (e) {
+      debugPrint("Falha ao conectar WebSocket: $e");
+      _isConnected = false;
+    }
   }
 
   void _extractTargetGesture() {
@@ -59,313 +109,708 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     } else {
       _targetGesture = title.split(":").last.trim();
     }
+    
+    // Regra Inteligente: Se for movimento, o usuário ganha instantaneamente (0s).
+    // Se for estático (Alfabeto), ele precisa segurar a pose (3s).
+    final lessonType = (widget.lesson['type'] ?? 'estatico').toString().toLowerCase();
+    _isMovement = lessonType == 'movimento' || lessonType == 'dynamic';
+    _secondsToHold = _isMovement ? 0 : 3;
   }
 
   @override
   void dispose() {
-    _streamSubscription?.cancel();
-    _channel?.sink.close();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
+    _channel?.sink.close();
     _confettiController.dispose();
     super.dispose();
   }
 
   Future<void> _initializeCamera() async {
-    final cameras = await availableCameras();
-    CameraDescription selectedCamera = cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
-    );
+    try {
+      final cameras = await availableCameras();
+      final selectedCamera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
 
-    _cameraController = CameraController(
-      selectedCamera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
-    );
+      _cameraController = CameraController(
+        selectedCamera,
+        ResolutionPreset.low,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.yuv420,
+      );
 
-    _initializeControllerFuture = _cameraController!.initialize();
+      await _cameraController!.initialize();
 
-    _initializeControllerFuture.then((_) {
       if (!mounted) return;
-      setState(() {
-        _isCameraInitialized = true;
-      });
-      _connectToWebSocket();
-    }).catchError((e) {
-      print("Erro ao inicializar a câmera: $e");
+      setState(() => _isCameraReady = true);
+      _startVisionStream(); // Inicia o envio via WebSocket
+    } catch (e) {
+      debugPrint("Erro ao iniciar câmera: $e");
+    }
+  }
+
+ // --- NOVA LÓGICA WEBSOCKET COM ISOLATE ---
+ void _startVisionStream() {
+    _cameraController!.startImageStream((CameraImage image) async {
+      // Ignora se não estiver conectado, se já estiver processando ou se já acertou
+      if (!_isConnected || _isProcessingFrame || _isCorrect) return;
+
+      final now = DateTime.now();
+      // Otimizamos para até 10 frames por segundo de processamento para maior fluidez
+      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 100) {
+        return;
+      }
+      
+      _lastFrameTime = now;
+      _isProcessingFrame = true; // Trava o envio até a resposta voltar
+
+      try {
+        final plane = image.planes[0];
+        
+        // --- O SEGREDO DO FPS ALTO ---
+        // Usamos o compute() para jogar a conversão pesada Base64 para outra Thread!
+        final String imageBase64 = await compute(_processFrameInIsolate, plane.bytes);
+
+        // Dispara direto no Socket (muito mais rápido que HTTP)
+        _channel!.sink.add(jsonEncode({
+          'image': imageBase64,
+          'width': image.width,
+          'height': image.height,
+          'stride': plane.bytesPerRow,
+          'model_type': (widget.lesson['type'] ?? 'estatico').toString().toLowerCase() == 'movimento' ? 'movimento' : 'alfabeto'
+        }));
+      } catch (e) {
+        debugPrint("Erro no processamento do frame: $e");
+        _isProcessingFrame = false;
+      }
     });
   }
 
-  void _connectToWebSocket() {
-    try {
-      // ATENÇÃO: Use o IP correto (10.0.2.2 ou Radmin)
-      final wsUrl = Uri.parse('ws://10.0.2.2:8080');
-      _channel = WebSocketChannel.connect(wsUrl);
+  String _normalizeGesture(String gesture) {
+    // Troca espaços, barras, hifens por underline e converte pra minúsculo (Padrão do Modelo Python)
+    return gesture.toLowerCase()
+        .replaceAll(RegExp(r'[áàâã]'), 'a')
+        .replaceAll(RegExp(r'[éèê]'), 'e')
+        .replaceAll(RegExp(r'[íìî]'), 'i')
+        .replaceAll(RegExp(r'[óòôõ]'), 'o')
+        .replaceAll(RegExp(r'[úùû]'), 'u')
+        .replaceAll(RegExp(r'[ç]'), 'c')
+        .replaceAll(RegExp(r'[\s/|-]+'), '_')
+        .trim();
+  }
 
-      _cameraController!.startImageStream((CameraImage image) {
-        if (_isStreaming) return; 
-        _isStreaming = true;
-        final plane = image.planes[0];
-        final String imageBase64 = base64Encode(plane.bytes);
+  // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
+ void _handleDetectionResult(String gesture, double confidence) async {
+    // Para movimentos confiamos 100% no backend (já que ele filtra a confianca), para estáticos > 0.6
+    String normalizedDetected = _normalizeGesture(gesture);
+    String normalizedTarget = _normalizeGesture(_targetGesture);
 
-        _channel?.sink.add(jsonEncode({
-          'image': imageBase64,
-          'height': image.height,
-          'width': image.width,
-          'stride': plane.bytesPerRow,
-        }));
-      });
+    bool isCurrentlyMatching = ((_isMovement || confidence > 0.6) && 
+                                normalizedDetected == normalizedTarget && 
+                                normalizedDetected != "nenhum");
 
-      _streamSubscription = _channel?.stream.listen((message) {
-        if (!mounted) return;
-        final data = json.decode(message);
-        
-        final String gesture = data['gesto'];
-        final double confidence = data['confianca'];
-
-        bool isCurrentlyMatching = false;
-        // Validação: Gesto correto E confiança > 60%
-        if (confidence > 0.6 && gesture == _targetGesture) {
-          isCurrentlyMatching = true;
-        }
-
-        if (isCurrentlyMatching) {
-          _firstDetectionTime ??= DateTime.now();
-          final duration = DateTime.now().difference(_firstDetectionTime!);
-          _secondsHeld = duration.inSeconds;
-
-          if (_secondsHeld >= _secondsToHold && !_isCorrect) {
-            // VENCEU!
-            _isCorrect = true; 
-            _confettiController.play(); // Dispara a festa
-          }
+    if (isCurrentlyMatching) {
+      if (!_isCorrect) {
+        if (_firstDetectionTime == null) {
+          _firstDetectionTime = DateTime.now();
+          _secondsHeld = 0;
         } else {
-          if (!_isCorrect) { 
-             _firstDetectionTime = null;
-             _secondsHeld = 0;
-          }
+          _secondsHeld = DateTime.now().difference(_firstDetectionTime!).inSeconds;
         }
 
-        setState(() {
-          _detectedGesture = gesture;
-          _detectedConfidence = confidence;
-        });
-        
-        _isStreaming = false;
-      }, onError: (error) {
-        print("Erro no WebSocket: $error");
-        _isStreaming = false;
-      }, onDone: () {
-        print("WebSocket desconectado.");
-        _isStreaming = false;
-      });
-    } catch (e) {
-      print("Não foi possível conectar ao WebSocket: $e");
+        // Se bateu a meta (ex: 3 segundos ou instantâneo)
+        if (_secondsHeld >= _secondsToHold) {
+          _isCorrect = true;
+          _onSuccess();
+        }
+      }
+    } else {
+      if (!_isCorrect) {
+        // IA piscou ou o usuário mexeu a mão: Zera o cronômetro!
+        _firstDetectionTime = null;
+        _secondsHeld = 0;
+      }
     }
+
+    // Atualiza a tela com o que a IA está enxergando agora
+    setState(() {
+      _detectedGesture = gesture;
+      _detectedConfidence = confidence;
+    });
+  }
+
+  void _onSuccess() async {
+    setState(() {
+      _isCorrect = true;
+    });
+
+    _confettiController.play();
+
+    if (await Vibration.hasVibrator()) {
+      if (_isMovement) {
+        // Vibração dupla para movimento (impacto imediato)
+        Vibration.vibrate(pattern: [0, 150, 100, 150]);
+      } else {
+        // Vibração simples para estático
+        Vibration.vibrate(duration: 500);
+      }
+    }
+    try {
+      await _audioPlayer.play(AssetSource('sounds/success.mp3'));
+    } catch (e) {
+      debugPrint("Erro ao tocar som: $e");
+    }
+  }
+
+  Future<void> _showStreakCelebration(int streak) async {
+    // Tocar um som de fogos / explosão, se houver
+    // await _audioPlayer.play(AssetSource('sounds/streak.mp3'));
+
+    await showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: AppColors.darkBG.withValues(alpha: 0.95), // Fundo quase opaco
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              // Confetes explosivos
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: ConfettiController(duration: const Duration(seconds: 3))..play(),
+                  blastDirectionality: BlastDirectionality.explosive,
+                  shouldLoop: true,
+                  colors: const [
+                    AppColors.neonGreen,
+                    AppColors.neonBlue,
+                    AppColors.neonPurple,
+                    AppColors.neonOrange,
+                  ],
+                  numberOfParticles: 50,
+                  gravity: 0.1,
+                ),
+              ),
+              // Conteúdo central
+              Center(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            color: Colors.deepOrange,
+                            size: 150,
+                            shadows: [
+                              Shadow(
+                                color: Colors.orange,
+                                blurRadius: 40,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            "$streak",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 80,
+                              fontWeight: FontWeight.w900,
+                              height: 1.0,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.deepOrange,
+                                  blurRadius: 20,
+                                )
+                              ],
+                            ),
+                          ),
+                          const Text(
+                            "DIAS CONSECUTIVOS",
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 3,
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                          const Text(
+                            "Você está pegando fogo! 🔥",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 50),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context); // Fecha o dialog
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.neonGreen,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              elevation: 10,
+                            ),
+                            child: const Text(
+                              "CONTINUAR",
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _saveProgress() async {
     if (!_isCorrect) return;
 
-    setState(() { _isSavingProgress = true; });
-    final token = await _storage.read(key: 'jwt_token');
-    
-    if (token == null) { 
-      setState(() { _isSavingProgress = false; });
-      return; 
-    }
-    
-    const String apiUrl = 'http://10.0.2.2:3000/progress';
-    final int lessonId = widget.lesson['id'];
-    const int scoreEarned = 10; 
+    setState(() {
+      _isSavingProgress = true;
+    });
+
+    const String apiUrl = '$apiBaseUrl/progress';
 
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json; charset=UTF-8',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode({
-          'lesson_id': lessonId,
-          'score': scoreEarned,
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final response = await ApiService.post(
+            apiUrl,
+            body: json.encode({'lesson_id': widget.lesson['id'], 'score': 10}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
-      
       final responseData = json.decode(response.body);
 
+      final currentStreak = Provider.of<UserProvider>(context, listen: false).user?.streakCount ?? 0;
+      bool showedCelebration = false;
+
+      // Atualiza a ofensiva em qualquer caso de sucesso (201 ou 200)
+      if (responseData['streak_count'] != null) {
+        final newStreak = responseData['streak_count'];
+        Provider.of<UserProvider>(context, listen: false).updateStreak(newStreak);
+
+        // Se a ofensiva aumentou de verdade (usuário concluiu a primeira lição do dia)
+        if (newStreak > currentStreak) {
+          await _showStreakCelebration(newStreak);
+          showedCelebration = true;
+          if (!mounted) return;
+        }
+      }
+
       if (response.statusCode == 201) {
+        Provider.of<UserProvider>(context, listen: false).addScore(10);
+        if (!showedCelebration) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(responseData['message'] ?? 'Progresso salvo! +10 XP'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        Navigator.pop(context, true);
+      } else if (response.statusCode == 200 || response.statusCode == 409) {
+        if (!showedCelebration) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(responseData['message'] ?? 'Você já concluiu esta lição.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        Navigator.pop(context, true);
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(responseData['message'] ?? 'Progresso salvo!'),
-            backgroundColor: Colors.green,
+          const SnackBar(
+            content: Text('Erro ao salvar progresso.'),
+            backgroundColor: Colors.red,
           ),
         );
-        Navigator.pop(context); 
-      } else if (response.statusCode == 409) {
-        Navigator.pop(context);
-      } else {
-         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao salvar.')));
       }
     } catch (e) {
-       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
     } finally {
-      setState(() { _isSavingProgress = false; });
+      if (mounted) setState(() => _isSavingProgress = false);
     }
   }
 
-  // Função auxiliar para cor da barra
-  Color _getConfidenceColor(double confidence) {
-    if (confidence < 0.4) return Colors.red;
-    if (confidence < 0.7) return Colors.orange;
-    return Colors.green;
+  Color _getStatusColor() {
+    if (_isCorrect) return AppColors.neonGreen;
+    if (_firstDetectionTime != null) return AppColors.neonOrange;
+    return Colors.white.withValues(alpha: 0.2);
   }
 
   @override
   Widget build(BuildContext context) {
     final String lessonTitle = widget.lesson['title'] ?? 'Lição';
+    // Prioriza os campos onde o GIF ou animação podem estar armazenados antes de pegar a foto estática
+    final String? helpImageUrl = widget.lesson['gif_url'] ?? widget.lesson['example_image_url'] ?? widget.lesson['video_url'] ?? widget.lesson['thumbnail_url'];
+    final Color statusColor = _getStatusColor();
 
     return Scaffold(
-      appBar: AppBar(title: Text(lessonTitle)),
-      // Stack permite colocar os confetes POR CIMA de tudo
-      body: Stack(
-        children: [
-          // 1. CONTEÚDO PRINCIPAL (EMBAIXO)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Meta
-                Column(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.darkBG, AppColors.darkBG2],
+          ),
+        ),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Faça o sinal para:', style: Theme.of(context).textTheme.titleMedium),
-                    Text(
-                      _targetGesture, 
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[800],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // ÁREA DA CÂMERA
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        // Borda muda de cor: Cinza -> Amarelo (contando) -> Verde (venceu)
-                        color: _isCorrect ? Colors.green : (_firstDetectionTime != null ? Colors.yellow : Colors.grey),
-                        width: _isCorrect ? 4 : (_firstDetectionTime != null ? 3 : 1),
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12.0),
-                      child: _isCameraInitialized
-                          ? Center(
-                              child: AspectRatio(
-                                aspectRatio: _cameraController!.value.aspectRatio,
-                                child: CameraPreview(_cameraController!),
-                              ),
-                            )
-                          : const Center(child: CircularProgressIndicator(color: Colors.white)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                // --- FEEDBACK E BARRA DE CONFIANÇA (FEATURE-015) ---
-                Column(
-                  children: [
-                    // Texto de Feedback
-                    if (_isCorrect)
-                      const Text("PARABÉNS! 🎉", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green))
-                    else if (_firstDetectionTime != null)
-                      Text(
-                        "Segure... ${_secondsHeld + 1}/$_secondsToHold",
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
-                      )
-                    else if (_detectedGesture != "Nenhum")
-                      Text("Detectado: $_detectedGesture", style: const TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.bold))
-                    else
-                      const Text("Posicione a mão...", style: TextStyle(fontSize: 18, color: Colors.grey)),
-                    
-                    const SizedBox(height: 10),
-
-                    // BARRA DE PROGRESSO (Confiança)
-                    if (!_isCorrect) // Só mostra se ainda não venceu
-                      Column(
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: Row(
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: LinearProgressIndicator(
-                              value: _detectedConfidence, // Valor de 0.0 a 1.0
-                              minHeight: 15,
-                              backgroundColor: Colors.grey[300],
-                              color: _getConfidenceColor(_detectedConfidence), // Muda de cor
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          Expanded(
+                            child: Text(
+                              lessonTitle,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: AppColors.neonGreen,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 5),
-                          Text(
-                            "${(_detectedConfidence * 100).toInt()}% de certeza",
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                          ),
+                          helpImageUrl != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.help_outline, color: AppColors.neonOrange),
+                                  onPressed: () => _showHelpDialog(context, helpImageUrl),
+                                )
+                              : const SizedBox(width: 48),
                         ],
                       ),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // BOTÃO DE CONCLUIR
-                _isSavingProgress
-                    ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton.icon(
-                        icon: Icon(_isCorrect ? Icons.check_circle : Icons.lock),
-                        label: Text(_isCorrect ? 'Concluir Lição (+10 XP)' : 'Acerte o sinal para liberar'),
-                        onPressed: _isCorrect ? _saveProgress : null, 
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.grey[300],
-                          disabledForegroundColor: Colors.grey[600],
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(fontSize: 18),
+                    ),
+
+                    // Meta
+                    Column(
+                      children: [
+                        Text(
+                          _secondsToHold == 0 ? "Faça o movimento para:" : "Faça o sinal para:",
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          _targetGesture,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w900,
+                            shadows: [
+                              Shadow(color: AppColors.neonGreen.withValues(alpha: 0.6), blurRadius: 15),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Câmera
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: statusColor,
+                            width: _isCorrect || _firstDetectionTime != null ? 4 : 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: statusColor.withValues(alpha: _isCorrect ? 0.5 : 0.2),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: _isCameraReady
+                              ? LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    return SizedBox(
+                                      width: constraints.maxWidth,
+                                      height: constraints.maxHeight,
+                                      child: FittedBox(
+                                        fit: BoxFit.cover,
+                                        child: SizedBox(
+                                          width: _cameraController!.value.previewSize!.height,
+                                          height: _cameraController!.value.previewSize!.width,
+                                          child: CameraPreview(_cameraController!),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : const Center(
+                                  child: CircularProgressIndicator(color: AppColors.neonGreen),
+                                ),
                         ),
                       ),
-              ],
-            ),
-          ),
+                    ),
 
-          // 2. WIDGET DE CONFETE (CORRIGIDO E EXPANDIDO)
-          Align(
-            alignment: Alignment.topCenter,
-            child: SizedBox.expand( // Garante que ocupe espaço para cair
-              child: ConfettiWidget(
-                confettiController: _confettiController,
-                blastDirectionality: BlastDirectionality.explosive, 
-                shouldLoop: false, 
-                colors: const [
-                  Colors.green, Colors.blue, Colors.pink, 
-                  Colors.orange, Colors.purple, Colors.red
-                ], 
-                numberOfParticles: 50, // Mais confetes
-                gravity: 0.3, 
-                minBlastForce: 10,
-                maxBlastForce: 30,
+                    // Feedback (Contador)
+                    Container(
+                      margin: const EdgeInsets.only(top: 20),
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardDark,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      ),
+                      child: Column(
+                        children: [
+                          if (_isCorrect) ...[
+                            const Icon(Icons.stars, color: AppColors.neonGreen, size: 60),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "PARABÉNS!",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.neonGreen,
+                              ),
+                            ),
+                          ] else if (_firstDetectionTime != null) ...[
+                            Text(
+                              _isMovement ? "ANALISANDO MOVIMENTO" : "MANTENHA O SINAL",
+                              style: TextStyle(
+                                color: AppColors.neonOrange.withValues(alpha: 0.8),
+                                fontSize: _isMovement ? 14 : 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            if (!_isMovement) ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    "${_secondsHeld + 1}",
+                                    style: const TextStyle(
+                                      color: AppColors.neonOrange,
+                                      fontSize: 46,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "/ $_secondsToHold s",
+                                    style: TextStyle(
+                                      color: AppColors.neonOrange.withValues(alpha: 0.8),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.0),
+                                child: CircularProgressIndicator(color: AppColors.neonOrange),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: (_secondsHeld + 1) / (_secondsToHold == 0 ? 1 : _secondsToHold),
+                                minHeight: 8,
+                                backgroundColor: AppColors.neonOrange.withValues(alpha: 0.2),
+                                color: AppColors.neonOrange,
+                              ),
+                            ),
+                          ] else ...[
+                            if (!_isMovement) ...[
+                              Text(
+                                _detectedGesture != "Nenhum"
+                                    ? "Detectado: $_detectedGesture"
+                                    : "Posicione sua mão na câmera...",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: _detectedGesture != "Nenhum"
+                                      ? Colors.white
+                                      : Colors.white.withValues(alpha: 0.4),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                  value: _detectedConfidence,
+                                  minHeight: 8,
+                                  backgroundColor: Colors.grey[800],
+                                  color: _detectedConfidence > 0.6 ? AppColors.neonGreen : AppColors.neonOrange,
+                                ),
+                              ),
+                            ] else ...[
+                              Text(
+                                "Faça o movimento para a câmera...",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Botão
+                    _isSavingProgress
+                        ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
+                        : SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton.icon(
+                              icon: Icon(
+                                _isCorrect ? Icons.check_circle : Icons.lock,
+                                color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
+                              ),
+                              label: Text(
+                                _isCorrect ? 'CONCLUIR LIÇÃO (+10 XP)' : 'Acerte o sinal para liberar',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              onPressed: _isCorrect ? _saveProgress : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _isCorrect ? AppColors.neonGreen : AppColors.cardDark,
+                                elevation: _isCorrect ? 4 : 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  side: BorderSide(
+                                    color: _isCorrect ? Colors.transparent : Colors.white.withValues(alpha: 0.1),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
-            ),
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _confettiController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  shouldLoop: false,
+                  colors: const [
+                    AppColors.neonGreen,
+                    Colors.blue,
+                    Colors.pink,
+                    Colors.orange,
+                    Colors.purple,
+                  ],
+                  numberOfParticles: 40,
+                  gravity: 0.2,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+
+  void _showHelpDialog(BuildContext context, String imageUrl) {
+    final bool isNetwork = imageUrl.startsWith('http');
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.darkBG2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Como fazer o sinal', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: isNetwork 
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.image_not_supported, color: Colors.grey, size: 100);
+                      },
+                    )
+                  : Image.asset(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.image_not_supported, color: Colors.grey, size: 100);
+                      },
+                    ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Assista ao movimento e tente repeti-lo para a câmera.', 
+                style: TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ENTENDI', style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

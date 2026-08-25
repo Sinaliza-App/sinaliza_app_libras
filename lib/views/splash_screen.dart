@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
-import 'package:sinaliza_app_libras/views/login_screen.dart';
-import 'package:http/http.dart' as http; // 1. Importe o http
-import 'dart:convert'; // 2. Importe o dart:convert
+import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
+import 'package:sinaliza_app_libras/views/onboarding_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'dart:convert';
+import 'package:sinaliza_app_libras/constants.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,85 +21,90 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Inicia a verificação assim que a tela é construída
-    _checkAuthStatus();
+    _checkLoginStatus();
   }
 
-  Future<void> _checkAuthStatus() async {
-    // Adiciona um pequeno delay (opcional, mas bom para UI)
-    await Future.delayed(const Duration(seconds: 1));
+  Future<void> _checkLoginStatus() async {
+    // 1. Espera um pouquinho (2 segundos) para mostrar a logo bonita
+    await Future.delayed(const Duration(seconds: 2));
 
-    // 1. Tenta ler o token do storage
-    final String? token = await _storage.read(key: 'jwt_token');
+    if (!mounted) return;
 
-    if (token == null) {
-      // Se não existe token, vá para a tela de Login
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-      return;
-    }
+    // 2. Tenta ler o token salvo
+    String? token = await _storage.read(key: 'jwt_token');
 
-    // 2. Se o token EXISTE, vamos VALIDÁ-LO com a API
-    // ATENÇÃO: Use '10.0.2.2' se estiver no Emulador Android
-    const String apiUrl = 'http://10.0.2.2:3000/users/me';
-    // Se estiver no app Desktop (Windows), pode usar 'localhost':
-    // const String apiUrl = 'http://localhost:3000/users/me';
+    if (!mounted) return;
 
-    try {
-      final response = await http.get(
-        Uri.parse(apiUrl),
-        headers: {
-          // 3. Enviamos o "crachá" (token) no cabeçalho
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
-
-      if (!mounted) return;
-
+    // 3. Decisão:
+    if (token != null && token.isNotEmpty) {
+      // Tenta buscar o perfil do usuário para popular o Provider
+      try {
+        final response = await ApiService.get('$apiBaseUrl/users/me');
         if (response.statusCode == 200) {
-        // --- SUCESSO! MODIFICAÇÃO AQUI ---
-        
-        // 2. Decodifica os dados do usuário
           final userData = json.decode(response.body);
-
-        // 3. Salva o usuário no Provider (Gerenciador de Estado Global)
-          Provider.of<UserProvider>(context, listen: false).setUser(userData);
-        
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const LessonListScreen()),
-        );
-      } else {
-        // --- FALHA (401, 400) ---
-        // O token é inválido ou expirou.
-        // Apagamos o token "podre" do celular.
-        await _storage.delete(key: 'jwt_token');
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+          if (mounted) {
+            Provider.of<UserProvider>(context, listen: false).setUser(userData);
+          }
+        }
+      } catch (e) {
+        debugPrint("Erro ao carregar perfil no splash: $e");
       }
-    } catch (e) {
-      // 4. Erro de rede (sem internet, API desligada)
-      // Não podemos validar, então mandamos para o Login por segurança.
+
       if (!mounted) return;
-      await _storage.delete(key: 'jwt_token'); // Limpa o token por via das dúvidas
+      // TEM TOKEN -> Vai direto para a Home (Módulos via MainTabScreen)
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const MainTabScreen()),
+      );
+    } else {
+      // MUDANÇA: Se não tá logado, manda pro Onboarding em vez do Login direto
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()), 
+        // Lembre de importar o arquivo onboarding_screen.dart no topo
       );
     }
   }
-
   @override
   Widget build(BuildContext context) {
-    // Uma tela de loading simples
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
+    // Sua tela bonita com logo e loading neon
+    return Scaffold(
+      backgroundColor: const Color(0xFF02040A),
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF02040A), Color.fromARGB(255, 7, 19, 44)],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Se tiver uma logo, coloque aqui. Se não, use o ícone/texto:
+                const Icon(
+                  Icons.waving_hand_outlined,
+                  size: 80,
+                  color: Color(0xFF00FF9D),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "SINALIZA",
+                  style: TextStyle(
+                    color: Color(0xFF00FF9D),
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                const CircularProgressIndicator(color: Color(0xFF00FF9D)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
