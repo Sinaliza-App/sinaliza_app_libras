@@ -120,8 +120,8 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // ESQUERDA: Logo
-                    Row(
-                      children: const [
+                    const Row(
+                      children: [
                         Icon(Icons.waving_hand_outlined, color: AppColors.neonGreen, size: 26),
                         SizedBox(width: 8),
                         Text(

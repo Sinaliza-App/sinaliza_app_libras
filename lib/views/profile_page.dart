@@ -158,7 +158,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "${xpRequired} XP",
+                        "$xpRequired XP",
                         style: TextStyle(
                           color: isUnlocked ? badgeColor : Colors.grey.withValues(alpha: 0.3),
                           fontSize: 10,
@@ -772,9 +772,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                     color: AppColors.neonRed.withValues(alpha: 0.5),
                                   ),
                                 ),
-                                child: Row(
+                                child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Icon(Icons.logout_rounded, color: AppColors.neonRed),
                                     SizedBox(width: 12),
                                     Text(

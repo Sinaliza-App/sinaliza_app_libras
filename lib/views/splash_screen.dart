@@ -78,18 +78,18 @@ class _SplashScreenState extends State<SplashScreen> {
               colors: [Color(0xFF02040A), Color.fromARGB(255, 7, 19, 44)],
             ),
           ),
-          child: Center(
+          child: const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Se tiver uma logo, coloque aqui. Se não, use o ícone/texto:
-                const Icon(
+                Icon(
                   Icons.waving_hand_outlined,
                   size: 80,
                   color: Color(0xFF00FF9D),
                 ),
-                const SizedBox(height: 20),
-                const Text(
+                SizedBox(height: 20),
+                Text(
                   "SINALIZA",
                   style: TextStyle(
                     color: Color(0xFF00FF9D),
@@ -98,8 +98,8 @@ class _SplashScreenState extends State<SplashScreen> {
                     letterSpacing: 2,
                   ),
                 ),
-                const SizedBox(height: 40),
-                const CircularProgressIndicator(color: Color(0xFF00FF9D)),
+                SizedBox(height: 40),
+                CircularProgressIndicator(color: Color(0xFF00FF9D)),
               ],
             ),
           ),

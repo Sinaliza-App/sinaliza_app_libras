@@ -74,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('E-mail ou senha incorretos.')),
+        const SnackBar(content: Text('E-mail ou senha incorretos.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -123,9 +123,9 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.start,
-                    children: const [
+                    children: [
                       Icon(Icons.waving_hand_outlined, color: neonGreen, size: 30),
                       SizedBox(width: 8),
                       Text(
