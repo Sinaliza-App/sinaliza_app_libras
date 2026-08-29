@@ -39,7 +39,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     try {
       final response = await ApiService.get('$apiBaseUrl/dictionary');
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(response.body) as List<dynamic>;
         if (mounted) {
           setState(() {
             _allSigns = data;
@@ -79,7 +79,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
   }
 
   Future<void> _toggleFavorite(Map<String, dynamic> sign) async {
-    final int signId = sign['id'];
+    final int signId = sign['id'] as int;
     try {
       final response = await ApiService.post('$apiBaseUrl/dictionary/favorite',
         body: json.encode({'sign_id': signId}),
@@ -87,7 +87,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
-        final bool newFav = data['is_favorite'];
+        final bool newFav = data['is_favorite'] as bool;
         
         setState(() {
           final indexAll = _allSigns.indexWhere((s) => s['id'] == signId);
@@ -217,14 +217,14 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                         itemCount: _filteredSigns.length,
                         itemBuilder: (context, index) {
-                          final sign = _filteredSigns[index];
+                          final sign = _filteredSigns[index] as Map<String, dynamic>;
                           return FadeInSlide(
                             duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
                             child: GestureDetector(
                               onTap: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
+                                  MaterialPageRoute<dynamic>(
                                     builder: (context) => _DictionaryZoomScreen(sign: sign, index: index),
                                   ),
                                 );
@@ -278,7 +278,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          sign['title'] ?? 'Sem Título',
+                                          (sign['title'] as String?) ?? 'Sem Título',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 20,
@@ -340,9 +340,9 @@ class _DictionaryZoomScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String title = sign['title'] ?? 'Sem Título';
-    final String description = sign['description'] ?? 'Sem descrição disponível.';
-    final String? imageUrl = sign['example_image_url'];
+    final String title = (sign['title'] as String?) ?? 'Sem Título';
+    final String description = (sign['description'] as String?) ?? 'Sem descrição disponível.';
+    final String? imageUrl = sign['example_image_url'] as String?;
 
     return Scaffold(
       backgroundColor: AppColors.darkBG,
@@ -353,11 +353,11 @@ class _DictionaryZoomScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [AppColors.darkBG, const Color.fromARGB(255, 7, 19, 44)],
+              colors: [AppColors.darkBG, Color.fromARGB(255, 7, 19, 44)],
             ),
           ),
           child: Padding(
@@ -365,10 +365,10 @@ class _DictionaryZoomScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
+                const Text(
                   "DICIONÁRIO DE LIBRAS",
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: Colors.white60,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 1.5,
@@ -442,7 +442,7 @@ class _DictionaryZoomScreen extends StatelessWidget {
                             onPressed: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
+                                MaterialPageRoute<dynamic>(
                                   builder: (context) => LessonDetailScreen(lesson: sign),
                                 ),
                               );

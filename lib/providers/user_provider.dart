@@ -21,12 +21,12 @@ class UserModel {
   // Factory para converter o JSON da API em um objeto UserModel
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'],
-      name: json['name'],
-      email: json['email'],
+      id: json['id'] as int,
+      name: json['name'] as String,
+      email: json['email'] as String,
       // Garante que o score seja lido como int, mesmo se vier null ou string
       totalScore: int.parse(json['total_score']?.toString() ?? '0'),
-      profilePicture: json['profile_picture'],
+      profilePicture: json['profile_picture'] as String?,
       streakCount: int.parse(json['streak_count']?.toString() ?? '0'),
     );
   }

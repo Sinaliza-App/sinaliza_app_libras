@@ -71,12 +71,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       _isConnected = true;
       
       _channel!.stream.listen(
-        (message) {
+        (dynamic message) {
           if (!mounted) return;
           try {
-            final data = jsonDecode(message);
-            final String gesture = data['prediction'] ?? "Nenhum";
-            final double confidence = (data['confidence'] ?? 0.0).toDouble();
+            final Map<String, dynamic> data = jsonDecode(message as String) as Map<String, dynamic>;
+            final String gesture = (data['prediction'] as String?) ?? "Nenhum";
+            final double confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
 
             _handleDetectionResult(gesture, confidence);
           } catch (e) {
@@ -85,7 +85,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             _isProcessingFrame = false;
           }
         },
-        onError: (error) {
+        onError: (dynamic error) {
           debugPrint("Erro no WebSocket: $error");
           _isConnected = false;
           _isProcessingFrame = false;
@@ -204,10 +204,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
  void _handleDetectionResult(String gesture, double confidence) async {
     // Para movimentos confiamos 100% no backend (já que ele filtra a confianca), para estáticos > 0.6
-    String normalizedDetected = _normalizeGesture(gesture);
-    String normalizedTarget = _normalizeGesture(_targetGesture);
+    final String normalizedDetected = _normalizeGesture(gesture);
+    final String normalizedTarget = _normalizeGesture(_targetGesture);
 
-    bool isCurrentlyMatching = ((_isMovement || confidence > 0.6) && 
+    final bool isCurrentlyMatching = ((_isMovement || confidence > 0.6) && 
                                 normalizedDetected == normalizedTarget && 
                                 normalizedDetected != "nenhum");
 
@@ -407,7 +407,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       // Atualiza a ofensiva em qualquer caso de sucesso (201 ou 200)
       if (responseData['streak_count'] != null) {
-        final newStreak = responseData['streak_count'];
+        final int newStreak = responseData['streak_count'] as int;
         Provider.of<UserProvider>(context, listen: false).updateStreak(newStreak);
 
         // Se a ofensiva aumentou de verdade (usuário concluiu a primeira lição do dia)
@@ -423,7 +423,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         if (!showedCelebration) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(responseData['message'] ?? 'Progresso salvo! +10 XP'),
+              content: Text((responseData['message'] as String?) ?? 'Progresso salvo! +10 XP'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 2),
             ),
@@ -434,7 +434,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         if (!showedCelebration) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(responseData['message'] ?? 'Você já concluiu esta lição.'),
+              content: Text((responseData['message'] as String?) ?? 'Você já concluiu esta lição.'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -463,9 +463,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String lessonTitle = widget.lesson['title'] ?? 'Lição';
+    final String lessonTitle = (widget.lesson['title'] as String?) ?? 'Lição';
     // Prioriza os campos onde o GIF ou animação podem estar armazenados antes de pegar a foto estática
-    final String? helpImageUrl = widget.lesson['gif_url'] ?? widget.lesson['example_image_url'] ?? widget.lesson['video_url'] ?? widget.lesson['thumbnail_url'];
+    final String? helpImageUrl = (widget.lesson['gif_url'] as String?) ?? (widget.lesson['example_image_url'] as String?) ?? (widget.lesson['video_url'] as String?) ?? (widget.lesson['thumbnail_url'] as String?);
     final Color statusColor = _getStatusColor();
 
     return Scaffold(
@@ -768,7 +768,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   void _showHelpDialog(BuildContext context, String imageUrl) {
     final bool isNetwork = imageUrl.startsWith('http');
 
-    showDialog(
+    showDialog<dynamic>(
       context: context,
       builder: (context) {
         return AlertDialog(

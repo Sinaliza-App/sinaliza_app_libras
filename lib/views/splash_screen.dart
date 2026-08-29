@@ -25,7 +25,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkLoginStatus() async {
     // 1. Espera um pouquinho (2 segundos) para mostrar a logo bonita
-    await Future.delayed(const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
@@ -42,7 +42,7 @@ class _SplashScreenState extends State<SplashScreen> {
         if (response.statusCode == 200) {
           final userData = json.decode(response.body);
           if (mounted) {
-            Provider.of<UserProvider>(context, listen: false).setUser(userData);
+            Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
           }
         }
       } catch (e) {
@@ -53,13 +53,13 @@ class _SplashScreenState extends State<SplashScreen> {
       // TEM TOKEN -> Vai direto para a Home (Módulos via MainTabScreen)
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const MainTabScreen()),
+        MaterialPageRoute<dynamic>(builder: (context) => const MainTabScreen()),
       );
     } else {
       // MUDANÇA: Se não tá logado, manda pro Onboarding em vez do Login direto
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()), 
+        MaterialPageRoute<dynamic>(builder: (context) => const OnboardingScreen()), 
         // Lembre de importar o arquivo onboarding_screen.dart no topo
       );
     }

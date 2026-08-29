@@ -82,7 +82,7 @@ class ApiService {
       );
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute<dynamic>(builder: (context) => const LoginScreen()),
         (route) => false,
       );
     }

@@ -46,7 +46,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
           userData['total_score'] = int.tryParse(userData['total_score'].toString()) ?? 0;
         }
         if (mounted) {
-          Provider.of<UserProvider>(context, listen: false).setUser(userData);
+          Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
         }
       }
     } catch (e) {
@@ -59,7 +59,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
       final response = await ApiService.get('$apiBaseUrl/modules');
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(response.body) as List<dynamic>;
         return data.cast<Map<String, dynamic>>();
       } else {
         if (response.statusCode == 401) _logout();
@@ -75,7 +75,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      MaterialPageRoute<dynamic>(builder: (context) => const LoginScreen()),
       (route) => false,
     );
   }
@@ -186,7 +186,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                         GestureDetector(
                           onTap: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const ProfilePage()),
+                            MaterialPageRoute<dynamic>(builder: (_) => const ProfilePage()),
                           ).then((_) {
                             if (mounted) _refreshModules();
                           }),
@@ -298,10 +298,10 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
             itemBuilder: (context, index) {
               final module = modules[index];
               final color = [AppColors.neonGreen, AppColors.neonPurple, AppColors.neonBlue, AppColors.neonOrange][index % 4];
-              final icon = _getModuleIcon(module['icon_name']);
+              final icon = _getModuleIcon(module['icon_name'] as String?);
 
-              final int total = module['total_lessons'] ?? 0;
-              final int completed = module['completed_lessons'] ?? 0;
+              final int total = (module['total_lessons'] as int?) ?? 0;
+              final int completed = (module['completed_lessons'] as int?) ?? 0;
               final double progress = total == 0 ? 0.0 : (completed / total);
               final String progressText = "${(progress * 100).toInt()}%";
 
@@ -313,11 +313,11 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                     HapticFeedback.lightImpact();
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      MaterialPageRoute<dynamic>(
                         builder: (context) => LessonListScreen(
-                          moduleId: module['id'],
-                          moduleTitle: module['title'],
-                          iconName: module['icon_name'],
+                          moduleId: module['id'] as int,
+                          moduleTitle: module['title'] as String,
+                          iconName: module['icon_name'] as String?,
                         ),
                       ),
                     );
@@ -365,7 +365,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  module['title'],
+                                  module['title'] as String,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,

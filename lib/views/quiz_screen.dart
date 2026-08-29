@@ -95,7 +95,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       // Se não jogou hoje, busca o dicionário para montar o quiz
       final response = await ApiService.get('$apiBaseUrl/dictionary');
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(response.body) as List<dynamic>;
         final signs = data.cast<Map<String, dynamic>>();
 
         // Filtra sinais com imagem (gif, example_image ou thumbnail)
@@ -178,7 +178,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     if (_hasAnswered) return;
     setState(() {
       _hasAnswered = true;
-      _correctAnswerIndex = _questions[_currentQuestionIndex]['correctIndex'];
+      _correctAnswerIndex = _questions[_currentQuestionIndex]['correctIndex'] as int;
     });
     _shakeController.forward(from: 0);
     HapticFeedback.heavyImpact();
@@ -197,7 +197,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     setState(() {
       _hasAnswered = true;
       _selectedAnswerIndex = index;
-      _correctAnswerIndex = question['correctIndex'];
+      _correctAnswerIndex = question['correctIndex'] as int;
       if (isCorrect) {
         _score += _pointsPerCorrect;
         _correctAnswers++;
@@ -727,7 +727,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Text(
-                                  option['title'] ?? '',
+                                  (option['title'] as String?) ?? '',
                                   style: TextStyle(
                                     color: textColor,
                                     fontSize: 16,
@@ -859,7 +859,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
                         // Hack simples para resetar a navegação para a aba 0 (Módulos)
                         Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (_) => const MainTabScreen(initialIndex: 0)),
+                          MaterialPageRoute<dynamic>(builder: (_) => const MainTabScreen(initialIndex: 0)),
                           (route) => false,
                         );
                       },

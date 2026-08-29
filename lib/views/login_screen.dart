@@ -58,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final userData = json.decode(response.body);
         
         if (!mounted) return;
-        Provider.of<UserProvider>(context, listen: false).setUser(userData);
+        Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Login bem-sucedido!')),
@@ -66,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const MainTabScreen()),
+          MaterialPageRoute<dynamic>(builder: (context) => const MainTabScreen()),
         );
       } else {
         throw Exception('Erro ao buscar dados do perfil. ${response.body}');
@@ -95,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _goToRegisterScreen() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
+      MaterialPageRoute<dynamic>(builder: (context) => const ProfileScreen()),
     );
   }
 
@@ -266,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               onTap: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
+                                  MaterialPageRoute<dynamic>(
                                     builder: (context) => const ForgotPasswordScreen(),
                                   ),
                                 );

@@ -97,7 +97,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
       if (response.statusCode == 200) {
         if (mounted) {
           setState(() {
-            _ranking = json.decode(response.body);
+            _ranking = json.decode(response.body) as List<dynamic>;
             // Pré-decodifica as imagens aqui para não travar a UI a cada frame
             for (var user in _ranking) {
               if (user is Map) {
@@ -209,8 +209,8 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                               return AnimatedBuilder(
                                 animation: _entranceController,
                                 builder: (context, child) {
-                                  double start = 0.5 + (index * 0.05);
-                                  double end = start + 0.3;
+                                  final double start = 0.5 + (index * 0.05);
+                                  final double end = start + 0.3;
                                   
                                   double itemValue = 1.0;
                                   if (!_entranceController.isCompleted) {
@@ -275,7 +275,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                       // Nome
                                       Expanded(
                                         child: Text(
-                                          user['name'],
+                                          user['name'] as String,
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -289,7 +289,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                           Text(
                                             "${user['total_score']} XP",
                                             style: TextStyle(
-                                              color: _getLeagueColor(user['total_score']),
+                                              color: _getLeagueColor(user['total_score'] as int),
                                               fontWeight: FontWeight.bold,
                                               fontSize: 16,
                                             ),
@@ -298,17 +298,17 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                           Row(
                                             children: [
                                               Icon(
-                                                _getLeagueIcon(user['total_score']),
-                                                color: _getLeagueColor(user['total_score']),
+                                                _getLeagueIcon(user['total_score'] as int),
+                                                color: _getLeagueColor(user['total_score'] as int),
                                                 size: 14,
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
-                                                user['total_score'] >= 1100 ? "Diamante" : 
-                                                user['total_score'] >= 600 ? "Ouro" :
-                                                user['total_score'] >= 300 ? "Prata" : "Bronze",
+                                                (user['total_score'] as int) >= 1100 ? "Diamante" : 
+                                                (user['total_score'] as int) >= 600 ? "Ouro" :
+                                                (user['total_score'] as int) >= 300 ? "Prata" : "Bronze",
                                                 style: TextStyle(
-                                                  color: _getLeagueColor(user['total_score']).withValues(alpha: 0.8),
+                                                  color: _getLeagueColor(user['total_score'] as int).withValues(alpha: 0.8),
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -339,7 +339,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
     required double height,
     bool isFirst = false,
   }) {
-    Animation<double> podiumAnim = position == 3 ? _podium3Animation : (position == 2 ? _podium2Animation : _podium1Animation);
+    final Animation<double> podiumAnim = position == 3 ? _podium3Animation : (position == 2 ? _podium2Animation : _podium1Animation);
 
     return Expanded(
       child: AnimatedBuilder(
@@ -413,7 +413,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
               
               // Nome do Usuário
               Text(
-                user['name'].split(" ")[0], // Pega só o primeiro nome
+                (user['name'] as String).split(" ")[0], // Pega só o primeiro nome
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                 overflow: TextOverflow.ellipsis,
               ),

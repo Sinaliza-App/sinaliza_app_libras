@@ -16,7 +16,7 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'sinaliza.db');
+    final String path = join(await getDatabasesPath(), 'sinaliza.db');
     return await openDatabase(path, version: 1, onCreate: _onCreate);
   }
   Future<void> _onCreate(Database db, int version) async {

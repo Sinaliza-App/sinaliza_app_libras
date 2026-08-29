@@ -113,8 +113,9 @@ class _ProfilePageState extends State<ProfilePage> {
           itemCount: _badges.length,
           itemBuilder: (context, index) {
             final badge = _badges[index];
-            final bool isUnlocked = userXp >= badge['xpRequired'];
-            final Color badgeColor = badge['color'];
+            final int xpRequired = badge['xpRequired'] as int;
+            final bool isUnlocked = userXp >= xpRequired;
+            final Color badgeColor = badge['color'] as Color;
             
             return Container(
               decoration: BoxDecoration(
@@ -141,13 +142,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        badge['icon'],
+                        badge['icon'] as IconData,
                         color: isUnlocked ? badgeColor : Colors.grey.withValues(alpha: 0.2),
                         size: 36,
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        badge['title'],
+                        badge['title'] as String,
                         style: TextStyle(
                           color: isUnlocked ? Colors.white : Colors.grey.withValues(alpha: 0.4),
                           fontSize: 11,
@@ -157,7 +158,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "${badge['xpRequired']} XP",
+                        "${xpRequired} XP",
                         style: TextStyle(
                           color: isUnlocked ? badgeColor : Colors.grey.withValues(alpha: 0.3),
                           fontSize: 10,
@@ -208,7 +209,7 @@ class _ProfilePageState extends State<ProfilePage> {
         if (userData['total_score'] != null) {
              userData['total_score'] = int.tryParse(userData['total_score'].toString()) ?? 0;
         }
-        Provider.of<UserProvider>(context, listen: false).setUser(userData);
+        Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
       }
     } catch (e) {
       debugPrint("Erro ao atualizar perfil: $e");
@@ -230,7 +231,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (image == null) return;
     
     // Recortar imagem (e comprimir)
-    CroppedFile? croppedFile = await ImageCropper().cropImage(
+    final CroppedFile? croppedFile = await ImageCropper().cropImage(
       sourcePath: image.path,
       aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
       uiSettings: [
@@ -395,7 +396,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      MaterialPageRoute<dynamic>(builder: (context) => const LoginScreen()),
       (route) => false,
     );
   }
@@ -681,9 +682,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               child: Builder(
                                 builder: (context) {
                                   final stats = _calculateLevel(user?.totalScore ?? 0);
-                                  final int level = stats['level'];
-                                  final double progress = stats['progress'];
-                                  final int nextScore = stats['nextLevelScore'];
+                                  final int level = stats['level'] as int;
+                                  final double progress = stats['progress'] as double;
+                                  final int nextScore = stats['nextLevelScore'] as int;
                                   
                                   return Column(
                                     children: [

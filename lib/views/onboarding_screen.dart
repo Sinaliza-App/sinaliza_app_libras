@@ -93,7 +93,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             // Vai para o Login e mata a tela de onboarding
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (context) => const LoginScreen()),
+                              MaterialPageRoute<dynamic>(builder: (context) => const LoginScreen()),
                             );
                           },
                           style: ElevatedButton.styleFrom(

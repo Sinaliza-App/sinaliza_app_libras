@@ -66,10 +66,10 @@ class _LessonListScreenState extends State<LessonListScreen> {
 
       final lessons = (json.decode(responses[0].body) as List)
           .cast<Map<String, dynamic>>();
-      final progress = json.decode(responses[1].body);
+      final progress = json.decode(responses[1].body) as List<dynamic>;
 
       final completedIds = progress
-          .map<int>((p) => p['lesson_id'] as int)
+          .map<int>((dynamic p) => p['lesson_id'] as int)
           .toSet();
 
       return CombinedLessonData(
@@ -175,7 +175,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                         customBorder: const CircleBorder(),
                         onTap: () => Navigator.push(
                           context,
-                          MaterialPageRoute(
+                          MaterialPageRoute<dynamic>(
                             builder: (_) => const ProfilePage(),
                           ),
                         ),
@@ -308,7 +308,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                               HapticFeedback.lightImpact();
                               await Navigator.push(
                                 context,
-                                MaterialPageRoute(
+                                MaterialPageRoute<dynamic>(
                                   builder: (context) =>
                                       LessonInstructionScreen(lesson: lesson),
                                 ),
@@ -350,7 +350,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          lesson["title"],
+                                          lesson["title"] as String,
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 18,
@@ -359,7 +359,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
-                                          lesson["description"] ??
+                                          (lesson["description"] as String?) ??
                                               "Toque para começar",
                                           style: TextStyle(
                                             color: Colors.white.withValues(

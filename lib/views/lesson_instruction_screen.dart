@@ -13,11 +13,11 @@ class LessonInstructionScreen extends StatelessWidget {
     const Color darkBG = Color(0xFF02040A);
     const Color cardDark = Color(0xFF050C1A);
 
-    final String title = lesson['title'] ?? 'Lição';
-    final String description = lesson['description'] ?? 'Sem descrição disponível.';
+    final String title = (lesson['title'] as String?) ?? 'Lição';
+    final String description = (lesson['description'] as String?) ?? 'Sem descrição disponível.';
     
     // Prioriza o gif, depois a imagem de exemplo, depois a thumbnail
-    final String? imageUrl = lesson['gif_url'] ?? lesson['example_image_url'] ?? lesson['thumbnail_url'];
+    final String? imageUrl = (lesson['gif_url'] as String?) ?? (lesson['example_image_url'] as String?) ?? (lesson['thumbnail_url'] as String?);
     final bool isNetwork = imageUrl != null && imageUrl.startsWith('http');
 
     return Scaffold(
@@ -29,11 +29,11 @@ class LessonInstructionScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [darkBG, const Color.fromARGB(255, 7, 19, 44)],
+              colors: [darkBG, Color.fromARGB(255, 7, 19, 44)],
             ),
           ),
           child: Padding(
@@ -41,9 +41,9 @@ class LessonInstructionScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
+            const Text(
               "INSTRUÇÕES DA LIÇÃO",
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 20,fontWeight: FontWeight.w500,
+              style: TextStyle(color: Colors.white60, fontSize: 20,fontWeight: FontWeight.w500,
               letterSpacing: 1.5,),
               textAlign: TextAlign.center,
               
@@ -131,7 +131,7 @@ class LessonInstructionScreen extends StatelessWidget {
                     // 2. Esperamos o resultado da tela da câmera (true se completou)
                     final result = await Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      MaterialPageRoute<dynamic>(
                         builder: (context) => LessonDetailScreen(lesson: lesson),
                       ),
                     );
