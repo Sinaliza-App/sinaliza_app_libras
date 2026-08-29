@@ -390,7 +390,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       _isSavingProgress = true;
     });
 
-    const String apiUrl = '$apiBaseUrl/progress';
+    final String apiUrl = '$apiBaseUrl/progress';
 
     try {
       final response = await ApiService.post(

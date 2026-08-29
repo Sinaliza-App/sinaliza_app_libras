@@ -44,7 +44,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
   }
 
   Future<CombinedLessonData> _fetchLessonsAndProgress() async {
-    const String baseUrl = apiBaseUrl;
+    final String baseUrl = apiBaseUrl;
 
     try {
       String lessonsUrl = '$baseUrl/lessons';

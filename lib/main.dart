@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:io'; // Para verificar a plataforma
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // Para banco de dados no PC
 import 'package:sinaliza_app_libras/views/splash_screen.dart';
@@ -19,10 +20,11 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
   
-  // ATENÇÃO: Substitua pelas suas chaves do Supabase!
+  await dotenv.load(fileName: ".env");
+
   await Supabase.initialize(
-    url: 'https://pkmfssdvdoaicdhfahwg.supabase.co',
-    publishableKey: 'sb_publishable_s-2ep7ZAxxJJC8IQeRfQ0g_v0pQsuA8',
+    url: dotenv.env['SUPABASE_URL']!,
+    publishableKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
   
   runApp(
