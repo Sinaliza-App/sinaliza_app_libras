@@ -3,11 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_screen.dart';
+import 'package:sinaliza_app_libras/widgets/social_login_row.dart';
 import 'package:sinaliza_app_libras/views/forgot_password_screen.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'dart:convert';
+import 'dart:async';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,6 +23,54 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  late final StreamSubscription<AuthState> _authStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+      
+      if (event == AuthChangeEvent.signedIn && session != null) {
+        if (!mounted) return;
+        
+        setState(() {
+          _isLoading = true;
+        });
+
+        try {
+          final response = await ApiService.get('$apiBaseUrl/users/me');
+          if (response.statusCode == 200) {
+            final userData = json.decode(response.body);
+            if (!mounted) return;
+            Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
+            
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute<dynamic>(builder: (context) => const MainTabScreen()),
+            );
+          }
+        } catch (e) {
+          debugPrint("Erro ao syncar perfil OAuth: $e");
+        } finally {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription.cancel();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _loginUser() async {
     final email = _emailController.text.trim();
@@ -314,7 +364,23 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 24),
+
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text('Ou continue com', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12)),
+                              ),
+                              Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1))),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          SocialLoginRow(isLoading: _isLoading),
+
+                          const SizedBox(height: 24),
 
                           GestureDetector(
                             onTap: _isLoading ? null : _goToRegisterScreen,

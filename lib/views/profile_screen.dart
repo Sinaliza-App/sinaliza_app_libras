@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sinaliza_app_libras/widgets/social_login_row.dart';
 
 // import 'package:sinaliza_app_libras/views/login_screen.dart'; // Se precisar voltar
 
@@ -353,7 +354,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 24),
+                          
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1), thickness: 1)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text(
+                                  'Ou continue com',
+                                  style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.1), thickness: 1)),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          SocialLoginRow(isLoading: _isSaving),
+                          
+                          const SizedBox(height: 24),
 
                           GestureDetector(
                             onTap: () => Navigator.pop(context),
