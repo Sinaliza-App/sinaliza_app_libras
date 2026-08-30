@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -16,9 +17,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Digite seu e-mail para recuperar a senha.')),
-      );
+      CustomSnackBar.showWarning(context, 'Digite seu e-mail para recuperar a senha.');
       return;
     }
 
@@ -29,23 +28,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Um link de recuperação de senha foi enviado para o seu e-mail.'), 
-          backgroundColor: AppColors.neonGreen,
-        ),
+      CustomSnackBar.showSuccess(
+        context,
+        'Um link de recuperação de senha foi enviado para o seu e-mail.',
       );
       Navigator.pop(context);
     } on AuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: AppColors.neonRed),
-      );
+      CustomSnackBar.showError(context, e.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao enviar e-mail de recuperação.'), backgroundColor: AppColors.neonRed),
-      );
+      CustomSnackBar.showError(context, 'Erro ao enviar e-mail de recuperação.');
     } finally {
       if (mounted) {
         setState(() {

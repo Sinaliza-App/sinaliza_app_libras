@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
@@ -53,9 +54,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro de conexão ao carregar o dicionário.')),
-        );
+        CustomSnackBar.showError(context, 'Erro de conexão ao carregar o dicionário.');
       }
     }
   }
@@ -103,9 +102,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao atualizar favorito.')),
-        );
+        CustomSnackBar.showError(context, 'Erro ao atualizar favorito.');
       }
     }
   }

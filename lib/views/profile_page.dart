@@ -4,12 +4,15 @@ import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 
 // Imports do seu projeto
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/constants.dart';
+
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -275,11 +278,11 @@ class _ProfilePageState extends State<ProfilePage> {
       
       if (mounted) {
         if (response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Foto atualizada!"), backgroundColor: AppColors.neonGreen));
+          CustomSnackBar.showSuccess(context, "Foto atualizada!");
           _refreshUserData();
         } else {
           debugPrint("Erro ${response.statusCode}: ${response.body}");
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: ${response.statusCode}"), backgroundColor: Colors.red));
+          CustomSnackBar.showError(context, "Erro: ${response.statusCode}");
         }
       }
     } catch (e) {
@@ -336,10 +339,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (mounted) {
         if (response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nome atualizado!"), backgroundColor: AppColors.neonGreen));
+          CustomSnackBar.showSuccess(context, "Nome atualizado!");
           _refreshUserData();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nome já existente."), backgroundColor: Colors.red));
+          CustomSnackBar.showError(context, "Nome já existente.");
         }
       }
     } catch (e) {
@@ -384,7 +387,7 @@ class _ProfilePageState extends State<ProfilePage> {
       
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+        CustomSnackBar.showError(context, "Erro: $e");
         setState(() => _isLoading = false);
       }
     }
@@ -392,8 +395,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _logout(BuildContext context) async {
     if (!context.mounted) return;
+    
+    // 1. Limpa o Supabase Auth primeiro (Evita auto-login imediato na LoginScreen)
+    await Supabase.instance.client.auth.signOut();
+    
+    if (!context.mounted) return;
+    // 2. Limpa o Provider Local
     Provider.of<UserProvider>(context, listen: false).clearUser();
 
+    // 3. Volta para a tela de Login
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute<dynamic>(builder: (context) => const LoginScreen()),

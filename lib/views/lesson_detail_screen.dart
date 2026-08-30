@@ -14,6 +14,8 @@ import 'package:flutter/foundation.dart'; // Para o compute()
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
+
 // --- FUNÇÃO ISOLADA (FORA DA CLASSE) PARA NÃO TRAVAR A UI ---
 String _processFrameInIsolate(Uint8List bytes) {
   return base64Encode(bytes);
@@ -421,35 +423,25 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (response.statusCode == 201) {
         Provider.of<UserProvider>(context, listen: false).addScore(10);
         if (!showedCelebration) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text((responseData['message'] as String?) ?? 'Progresso salvo! +10 XP'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
+          CustomSnackBar.showSuccess(
+            context,
+            (responseData['message'] as String?) ?? 'Progresso salvo! +10 XP',
           );
         }
         Navigator.pop(context, true);
       } else if (response.statusCode == 200 || response.statusCode == 409) {
         if (!showedCelebration) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text((responseData['message'] as String?) ?? 'Você já concluiu esta lição.'),
-              backgroundColor: Colors.orange,
-            ),
+          CustomSnackBar.showWarning(
+            context,
+            (responseData['message'] as String?) ?? 'Você já concluiu esta lição.',
           );
         }
         Navigator.pop(context, true);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erro ao salvar progresso.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        CustomSnackBar.showError(context, 'Erro ao salvar progresso.');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+      if (mounted) CustomSnackBar.showError(context, 'Erro: $e');
     } finally {
       if (mounted) setState(() => _isSavingProgress = false);
     }

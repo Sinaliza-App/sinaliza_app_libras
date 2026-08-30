@@ -8,6 +8,8 @@ import 'package:sinaliza_app_libras/views/forgot_password_screen.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/constants.dart';
+
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 import 'dart:convert';
 import 'dart:async';
 
@@ -77,9 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, preencha e-mail e senha.')),
-      );
+      CustomSnackBar.showWarning(context, 'Por favor, preencha e-mail e senha.');
       return;
     }
 
@@ -110,9 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Login bem-sucedido!')),
-        );
+        CustomSnackBar.showSuccess(context, 'Login bem-sucedido!');
 
         Navigator.pushReplacement(
           context,
@@ -123,14 +121,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AuthException catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('E-mail ou senha incorretos.')),
-      );
+      CustomSnackBar.showError(context, 'E-mail ou senha incorretos.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: ${e.toString()}')),
-      );
+      CustomSnackBar.showError(context, 'Erro: ${e.toString()}');
     } finally {
       if (mounted) {
         setState(() {

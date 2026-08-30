@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/main.dart'; // Precisamos do navigatorKey
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 
 class ApiService {
   static Future<String?> _getToken() async {
@@ -70,15 +71,19 @@ class ApiService {
   }
 
   static Future<void> _logoutAndRedirect() async {
+    // Se a sessão já estiver nula (usuário clicou em sair manualmente),
+    // não precisamos mostrar a mensagem de expiração nem forçar o redirecionamento de novo.
+    if (Supabase.instance.client.auth.currentSession == null) {
+      return;
+    }
+
     await Supabase.instance.client.auth.signOut();
     
     final context = navigatorKey.currentContext;
     if (context != null && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sua sessão expirou. Por favor, faça login novamente.'),
-          backgroundColor: Colors.red,
-        ),
+      CustomSnackBar.showError(
+        context,
+        'Sua sessão expirou. Por favor, faça login novamente.',
       );
       Navigator.pushAndRemoveUntil(
         context,

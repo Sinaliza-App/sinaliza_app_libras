@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sinaliza_app_libras/widgets/social_login_row.dart';
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 
 // import 'package:sinaliza_app_libras/views/login_screen.dart'; // Se precisar voltar
 
@@ -55,9 +56,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // 1. Validação básica de campos vazios
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Preencha todos os campos!")),
-      );
+      CustomSnackBar.showWarning(context, "Preencha todos os campos!");
       return;
     }
 
@@ -67,22 +66,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (passwordError != null) {
       // Se houver erro, mostra a mensagem específica
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(passwordError), // Mostra exatamente o que falta
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      CustomSnackBar.showWarning(context, passwordError);
       return; // Para a execução aqui
     }
     if (!_isEmailValid(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('E-mail inválido. Verifique se tem @ e .com'), 
-          backgroundColor: Colors.red
-        ),
-      );
+      CustomSnackBar.showError(context, 'E-mail inválido. Verifique se tem @ e .com');
       return; // Para tudo aqui e não envia pro servidor
     }
 
@@ -99,30 +87,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (res.user != null) {
         // SUCESSO
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Usuário criado com sucesso! Verifique seu e-mail."),
-            backgroundColor: Colors.green,
-          ),
-        );
+        CustomSnackBar.showSuccess(context, "Usuário criado com sucesso! Verifique seu e-mail.");
         Navigator.pop(context); 
       }
     } on AuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: Colors.red,
-        ),
-      );
+      CustomSnackBar.showError(context, e.message);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Erro de conexão: $e"),
-          backgroundColor: Colors.red,
-        ),
-      );
+      CustomSnackBar.showError(context, "Erro de conexão: $e");
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);

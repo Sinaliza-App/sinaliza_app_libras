@@ -9,6 +9,8 @@ import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:confetti/confetti.dart';
+
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 
 class QuizScreen extends StatefulWidget {
@@ -106,9 +108,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
 
         if (signsWithImage.length < 4) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Poucos sinais com imagem para gerar o quiz.')),
-            );
+            CustomSnackBar.showWarning(context, 'Poucos sinais com imagem para gerar o quiz.');
           }
           return;
         }
@@ -121,9 +121,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro de conexão.')),
-        );
+        CustomSnackBar.showError(context, 'Erro de conexão.');
       }
     }
   }
