@@ -65,8 +65,17 @@ class ApiService {
   }
 
   static void _handleAuthErrors(http.Response response) {
-    if (response.statusCode == 401 || response.statusCode == 403) {
+    if (response.statusCode == 401) {
       _logoutAndRedirect();
+    } else if (response.statusCode == 403) {
+      // Erro 403 significa falha de RLS (Forbidden / Acesso Negado)
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        CustomSnackBar.showError(
+          context,
+          'Acesso Negado: Ação restrita a administradores.',
+        );
+      }
     }
   }
 
