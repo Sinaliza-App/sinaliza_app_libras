@@ -12,6 +12,7 @@ import 'package:confetti/confetti.dart';
 
 import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class QuizScreen extends StatefulWidget {
   const QuizScreen({super.key});
@@ -178,6 +179,15 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
       _hasAnswered = true;
       _correctAnswerIndex = _questions[_currentQuestionIndex]['correctIndex'] as int;
     });
+
+    final question = _questions[_currentQuestionIndex];
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      Supabase.instance.client.rpc<dynamic>('increment_quiz_error', params: {
+        'p_user_id': userId,
+        'p_sign_id': question['sign']['id'],
+      }).catchError((dynamic e) { debugPrint("Erro ao salvar erro no quiz: $e"); });
+    }
     _shakeController.forward(from: 0);
     HapticFeedback.heavyImpact();
     Future.delayed(const Duration(milliseconds: 1500), _goToNext);
@@ -207,6 +217,14 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     } else {
       _shakeController.forward(from: 0);
       HapticFeedback.heavyImpact();
+      
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        Supabase.instance.client.rpc<dynamic>('increment_quiz_error', params: {
+          'p_user_id': userId,
+          'p_sign_id': question['sign']['id'],
+        }).catchError((dynamic e) { debugPrint("Erro ao salvar erro no quiz: $e"); });
+      }
     }
 
     Future.delayed(const Duration(milliseconds: 1500), _goToNext);

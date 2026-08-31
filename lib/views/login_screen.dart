@@ -5,6 +5,7 @@ import 'package:sinaliza_app_libras/views/main_tab_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_screen.dart';
 import 'package:sinaliza_app_libras/widgets/social_login_row.dart';
 import 'package:sinaliza_app_libras/views/forgot_password_screen.dart';
+import 'package:sinaliza_app_libras/views/set_password_screen.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/constants.dart';
@@ -42,17 +43,29 @@ class _LoginScreenState extends State<LoginScreen> {
         });
 
         try {
-          final response = await ApiService.get('$apiBaseUrl/users/me');
-          if (response.statusCode == 200) {
-            final userData = json.decode(response.body);
-            if (!mounted) return;
-            Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
-            
+          final userData = await Supabase.instance.client
+              .from('users')
+              .select('*')
+              .eq('auth_id', session.user.id)
+              .single();
+
+          if (!mounted) return;
+          Provider.of<UserProvider>(context, listen: false).setUser(userData);
+          
+          final hasPassword = userData['has_password'] == true;
+
+          if (!hasPassword) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute<dynamic>(builder: (context) => const SetPasswordScreen()),
+            );
+          } else {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute<dynamic>(builder: (context) => const MainTabScreen()),
             );
           }
+
         } catch (e) {
           debugPrint("Erro ao syncar perfil OAuth: $e");
         } finally {

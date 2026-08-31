@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 
 import 'dart:convert';
-
+import 'package:flutter/services.dart';
 
 import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/views/login_screen.dart';
+import 'package:sinaliza_app_libras/views/changelog_screen.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:sinaliza_app_libras/widgets/animations/neon_pulse.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ModuleListScreen extends StatefulWidget {
   const ModuleListScreen({super.key});
@@ -24,6 +26,9 @@ class ModuleListScreen extends StatefulWidget {
 
 class _ModuleListScreenState extends State<ModuleListScreen> {
   late Future<List<Map<String, dynamic>>> _modulesFuture;
+  bool _hasNewNotifications = false;
+  final _storage = const FlutterSecureStorage();
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +40,36 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
       _modulesFuture = _fetchModules();
     });
     _fetchUserData();
+    _checkNotifications();
+  }
+
+  Future<void> _checkNotifications() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('notifications')
+          .select('created_at')
+          .order('created_at', ascending: false)
+          .limit(1);
+          
+      if (response.isNotEmpty) {
+        final latestNotificationDate = DateTime.parse(response[0]['created_at'] as String);
+        final userId = Supabase.instance.client.auth.currentUser?.id ?? 'guest';
+        final lastSeenString = await _storage.read(key: 'last_seen_notification_date_$userId');
+        
+        if (lastSeenString == null) {
+          if (mounted) setState(() => _hasNewNotifications = true);
+        } else {
+          final lastSeenDate = DateTime.parse(lastSeenString);
+          if (latestNotificationDate.isAfter(lastSeenDate)) {
+            if (mounted) setState(() => _hasNewNotifications = true);
+          } else {
+             if (mounted) setState(() => _hasNewNotifications = false);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro ao verificar notificações: $e");
+    }
   }
 
   Future<void> _fetchUserData() async {
@@ -181,6 +216,47 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             );
                           },
                         ),
+                        const SizedBox(width: 8),
+                        // Ícone de Notificações (Mural de Novidades)
+                        GestureDetector(
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute<dynamic>(builder: (_) => const ChangelogScreen()),
+                            );
+                            _checkNotifications(); // Recheca ao voltar
+                          },
+                          child: Stack(
+                            alignment: Alignment.topRight,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                  border: Border.all(color: Colors.transparent),
+                                ),
+                                child: Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: _hasNewNotifications ? AppColors.neonBlue : Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                              if (_hasNewNotifications)
+                                const Positioned(
+                                  right: 2,
+                                  top: 2,
+                                  child: NeonPulse(
+                                    neonColor: AppColors.neonBlue,
+                                    child: CircleAvatar(
+                                      radius: 4,
+                                      backgroundColor: AppColors.neonBlue,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: 10),
                         // Foto de Perfil
                         GestureDetector(
@@ -204,9 +280,12 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                 if (user != null &&
                                     user.profilePicture != null &&
                                     user.profilePicture!.isNotEmpty) {
-                                  final Uint8List? imageBytes = () {
+                                  final ImageProvider? imageProvider = (() {
                                     try {
                                       String base64Str = user.profilePicture!;
+                                      if (base64Str.startsWith('http')) {
+                                        return NetworkImage(base64Str) as ImageProvider;
+                                      }
                                       if (base64Str.contains(',')) {
                                         base64Str = base64Str.split(',').last;
                                       }
@@ -214,15 +293,15 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                                       while (base64Str.length % 4 != 0) {
                                         base64Str += '=';
                                       }
-                                      return base64Decode(base64Str);
+                                      return MemoryImage(base64Decode(base64Str)) as ImageProvider;
                                     } catch (e) {
                                       return null;
                                     }
-                                  }();
-                                  if (imageBytes != null) {
+                                  })();
+                                  if (imageProvider != null) {
                                     return CircleAvatar(
                                       radius: 18,
-                                      backgroundImage: MemoryImage(imageBytes),
+                                      backgroundImage: imageProvider,
                                     );
                                   }
                                 }
@@ -354,14 +433,37 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  "MÓDULO ${index + 1}",
-                                  style: TextStyle(
-                                    color: color,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      "MÓDULO ${index + 1}",
+                                      style: TextStyle(
+                                        color: color,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                    if (module['is_draft'] == true) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withValues(alpha: 0.2),
+                                          border: Border.all(color: Colors.orange),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          "RASCUNHO",
+                                          style: TextStyle(
+                                            color: Colors.orange,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(

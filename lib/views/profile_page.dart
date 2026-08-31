@@ -13,6 +13,8 @@ import 'package:sinaliza_app_libras/views/login_screen.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 
 import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
+import 'package:sinaliza_app_libras/views/change_password_screen.dart';
+
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -24,6 +26,43 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   bool _isLoading = false;
+
+  Widget _buildAdminBadge(bool isAdmin) {
+    if (!isAdmin) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.neonGreen.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.neonGreen.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.neonGreen.withValues(alpha: 0.2),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_user, color: AppColors.neonGreen, size: 16),
+          SizedBox(width: 6),
+          Text(
+            'PROFESSOR',
+            style: TextStyle(
+              color: AppColors.neonGreen,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
 
   // Lista de conquistas
@@ -381,8 +420,10 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _isLoading = true);
     
     try {
-      await ApiService.delete('$apiBaseUrl/users/me');
-      
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        await Supabase.instance.client.rpc<dynamic>('delete_user_account', params: {'target_user_id': userId});
+      }
       if (mounted) _logout(context);
       
     } catch (e) {
@@ -520,16 +561,22 @@ class _ProfilePageState extends State<ProfilePage> {
                                       image: () {
                                         if (user?.profilePicture != null && user!.profilePicture!.isNotEmpty) {
                                           try {
-                                            String base64Str = user.profilePicture!;
-                                            if (base64Str.contains(',')) {
-                                              base64Str = base64Str.split(',').last;
+                                            String imageStr = user.profilePicture!;
+                                            if (imageStr.startsWith('http')) {
+                                              return DecorationImage(
+                                                image: NetworkImage(imageStr),
+                                                fit: BoxFit.cover,
+                                              );
                                             }
-                                            base64Str = base64Str.replaceAll(RegExp(r'\s+'), '');
-                                            while (base64Str.length % 4 != 0) {
-                                              base64Str += '=';
+                                            if (imageStr.contains(',')) {
+                                              imageStr = imageStr.split(',').last;
+                                            }
+                                            imageStr = imageStr.replaceAll(RegExp(r'\s+'), '');
+                                            while (imageStr.length % 4 != 0) {
+                                              imageStr += '=';
                                             }
                                             return DecorationImage(
-                                              image: MemoryImage(base64Decode(base64Str)),
+                                              image: MemoryImage(base64Decode(imageStr)),
                                               fit: BoxFit.cover,
                                             );
                                           } catch (e) {
@@ -567,13 +614,16 @@ class _ProfilePageState extends State<ProfilePage> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  user?.name ?? 'Usuário',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.5,
+                                Flexible(
+                                  child: Text(
+                                    user?.name ?? 'Usuário',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
                                 ),
                                 // --- AQUI ESTÁ O LÁPIS (EDITAR) ---
@@ -595,6 +645,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                               textAlign: TextAlign.center,
                             ),
+
+                            // --- ADMIN BADGE ---
+                            if (user != null) _buildAdminBadge(user.isAdmin),
 
                             const SizedBox(height: 30),
 
@@ -762,11 +815,51 @@ class _ProfilePageState extends State<ProfilePage> {
                                 }
                               ),
                             ),
+                            const SizedBox(height: 16),
+
+                            // --- MUDAR SENHA ---
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute<dynamic>(builder: (context) => const ChangePasswordScreen()),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                height: 60,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: AppColors.neonBlue.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: AppColors.neonBlue.withValues(alpha: 0.5),
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.lock_reset_rounded, color: AppColors.neonBlue),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      "Definir / Alterar Senha",
+                                      style: TextStyle(
+                                        color: AppColors.neonBlue,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                             const SizedBox(height: 30),
 
                             // --- GRID DE CONQUISTAS ---
                             _buildBadgesGrid(user?.totalScore ?? 0),
                             const SizedBox(height: 40),
+
+                            const SizedBox(height: 16),
 
                             // 4. BOTÃO DE LOGOUT
                             InkWell(

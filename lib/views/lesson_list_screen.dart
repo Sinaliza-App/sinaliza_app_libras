@@ -187,11 +187,21 @@ class _LessonListScreenState extends State<LessonListScreen> {
                               if (user != null &&
                                   user.profilePicture != null &&
                                   user.profilePicture!.isNotEmpty) {
+                                ImageProvider imageProvider;
+                                if (user.profilePicture!.startsWith('http')) {
+                                  imageProvider = NetworkImage(user.profilePicture!);
+                                } else {
+                                  String base64Str = user.profilePicture!;
+                                  if (base64Str.contains(',')) base64Str = base64Str.split(',').last;
+                                  base64Str = base64Str.replaceAll(RegExp(r'\s+'), '');
+                                  while (base64Str.length % 4 != 0) {
+                                    base64Str += '=';
+                                  }
+                                  imageProvider = MemoryImage(base64Decode(base64Str));
+                                }
                                 return CircleAvatar(
                                   radius: 18,
-                                  backgroundImage: MemoryImage(
-                                    base64Decode(user.profilePicture!),
-                                  ),
+                                  backgroundImage: imageProvider,
                                 );
                               } else {
                                 return const CircleAvatar(
@@ -299,6 +309,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                       itemBuilder: (context, index) {
                         final lesson = lessons[index];
                         final bool isDone = completed.contains(lesson["id"]);
+                        final bool isDraft = lesson["is_draft"] == true;
 
                         return FadeInSlide(
                           duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
@@ -315,66 +326,96 @@ class _LessonListScreenState extends State<LessonListScreen> {
                               );
                               if (mounted) _refreshData();
                             },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 18),
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardDark,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: isDone
-                                      ? AppColors.neonGreen
-                                      : AppColors.neonPurple.withValues(alpha: 0.3),
-                                  width: 1.5,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: (isDone ? AppColors.neonGreen : AppColors.neonPurple)
-                                        .withValues(alpha: 0.1),
-                                    blurRadius: 12,
-                                    spreadRadius: 2,
+                            child: Stack(
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 18),
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardDark,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: isDone
+                                          ? AppColors.neonGreen
+                                          : (isDraft ? Colors.amber : AppColors.neonPurple.withValues(alpha: 0.3)),
+                                      width: 1.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: (isDone ? AppColors.neonGreen : (isDraft ? Colors.amber : AppColors.neonPurple))
+                                            .withValues(alpha: 0.1),
+                                        blurRadius: 12,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isDone ? Icons.star : Icons.front_hand,
-                                    color: isDone ? AppColors.neonGreen : AppColors.neonPurple,
-                                    size: 32,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          lesson["title"] as String,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          (lesson["description"] as String?) ??
-                                              "Toque para começar",
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.6,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isDone ? Icons.star : Icons.front_hand,
+                                        color: isDone ? AppColors.neonGreen : (isDraft ? Colors.amber : AppColors.neonPurple),
+                                        size: 32,
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    lesson["title"] as String,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 18,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            fontSize: 14,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              (lesson["description"] as String?) ??
+                                                  "Toque para começar",
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.6,
+                                                ),
+                                                fontSize: 14,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isDraft)
+                                  Positioned(
+                                    top: 0,
+                                    right: 10,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        "RASCUNHO",
+                                        style: TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ],
-                              ),
+                              ],
                             ),
                           ),
                         );

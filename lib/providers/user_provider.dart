@@ -8,6 +8,7 @@ class UserModel {
   final int totalScore; // <--- NOVO CAMPO
   final String? profilePicture;
   final int streakCount;
+  final bool isAdmin; // <--- Admin flag
 
   UserModel({
     required this.id, 
@@ -16,6 +17,7 @@ class UserModel {
     required this.totalScore, // <--- NOVO CAMPO
     this.profilePicture,
     this.streakCount = 0,
+    this.isAdmin = false,
   });
 
   // Factory para converter o JSON da API em um objeto UserModel
@@ -28,6 +30,7 @@ class UserModel {
       totalScore: int.parse(json['total_score']?.toString() ?? '0'),
       profilePicture: json['profile_picture'] as String?,
       streakCount: int.parse(json['streak_count']?.toString() ?? '0'),
+      isAdmin: json['is_admin'] == true,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:sinaliza_app_libras/views/lesson_detail_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
@@ -347,6 +348,31 @@ class _DictionaryZoomScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flag_outlined, color: AppColors.neonRed),
+            tooltip: 'Reportar problema',
+            onPressed: () async {
+              final desc = await _showReportDialog(context);
+              if (desc != null && desc.trim().isNotEmpty) {
+                try {
+                  final userId = Supabase.instance.client.auth.currentUser?.id;
+                  await Supabase.instance.client.from('reports').insert({
+                    'user_id': userId,
+                    'target_type': 'sign',
+                    'target_id': sign['id'],
+                    'description': desc,
+                  });
+                  if (!context.mounted) return;
+                  CustomSnackBar.showSuccess(context, 'Report enviado aos administradores!');
+                } catch (e) {
+                  if (!context.mounted) return;
+                  CustomSnackBar.showError(context, 'Erro ao enviar report.');
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: Container(
@@ -473,6 +499,41 @@ class _DictionaryZoomScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // --- NOVA FUNÇÃO: REPORTAR (DENÚNCIA) ---
+  Future<String?> _showReportDialog(BuildContext context) async {
+    final TextEditingController descCtrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardDark,
+        title: const Text("Reportar Problema", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: descCtrl,
+          maxLines: 3,
+          style: const TextStyle(color: Colors.white),
+          cursorColor: AppColors.neonRed,
+          decoration: const InputDecoration(
+            hintText: "O que há de errado neste sinal?",
+            hintStyle: TextStyle(color: Colors.grey),
+            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.neonRed)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, descCtrl.text),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonRed, foregroundColor: Colors.white),
+            child: const Text("ENVIAR"),
+          ),
+        ],
       ),
     );
   }

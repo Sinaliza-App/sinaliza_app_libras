@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
 import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:confetti/confetti.dart';
@@ -385,6 +386,41 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     );
   }
 
+  // --- NOVA FUNÇÃO: REPORTAR (DENÚNCIA) ---
+  Future<String?> _showReportDialog(BuildContext context) async {
+    final TextEditingController descCtrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardDark,
+        title: const Text("Reportar Problema", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: descCtrl,
+          maxLines: 3,
+          style: const TextStyle(color: Colors.white),
+          cursorColor: AppColors.neonRed,
+          decoration: const InputDecoration(
+            hintText: "O que há de errado nesta lição?",
+            hintStyle: TextStyle(color: Colors.grey),
+            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.neonRed)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, descCtrl.text),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonRed, foregroundColor: Colors.white),
+            child: const Text("ENVIAR"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveProgress() async {
     if (!_isCorrect) return;
 
@@ -499,12 +535,35 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               ),
                             ),
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.flag_outlined, color: AppColors.neonRed),
+                            tooltip: 'Reportar problema',
+                            onPressed: () async {
+                              final desc = await _showReportDialog(context);
+                              if (desc != null && desc.trim().isNotEmpty) {
+                                try {
+                                  final userId = Supabase.instance.client.auth.currentUser?.id;
+                                  await Supabase.instance.client.from('reports').insert({
+                                    'user_id': userId,
+                                    'target_type': 'lesson',
+                                    'target_id': widget.lesson['id'],
+                                    'description': desc,
+                                  });
+                                  if (!context.mounted) return;
+                                  CustomSnackBar.showSuccess(context, 'Report enviado aos administradores!');
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  CustomSnackBar.showError(context, 'Erro ao enviar report.');
+                                }
+                              }
+                            },
+                          ),
                           helpImageUrl != null
                               ? IconButton(
                                   icon: const Icon(Icons.help_outline, color: AppColors.neonOrange),
                                   onPressed: () => _showHelpDialog(context, helpImageUrl),
                                 )
-                              : const SizedBox(width: 48),
+                              : const SizedBox(width: 0),
                         ],
                       ),
                     ),

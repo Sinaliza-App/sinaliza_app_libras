@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
-
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
@@ -53,20 +51,23 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
     super.dispose();
   }
 
-  Uint8List? _safeDecodeBase64(String? base64StrNullable) {
+  ImageProvider? _safeDecodeBase64(String? base64StrNullable) {
     if (base64StrNullable == null || base64StrNullable.isEmpty) return null;
     try {
-      String base64Str = base64StrNullable;
-      if (base64Str.contains(',')) {
-        base64Str = base64Str.split(',').last;
+      String imageStr = base64StrNullable;
+      if (imageStr.startsWith('http')) {
+        return NetworkImage(imageStr);
+      }
+      if (imageStr.contains(',')) {
+        imageStr = imageStr.split(',').last;
       }
       // Remove espaços em branco e quebras de linha
-      base64Str = base64Str.replaceAll(RegExp(r'\s+'), '');
+      imageStr = imageStr.replaceAll(RegExp(r'\s+'), '');
       // Conserta o padding se não for múltiplo de 4
-      while (base64Str.length % 4 != 0) {
-        base64Str += '=';
+      while (imageStr.length % 4 != 0) {
+        imageStr += '=';
       }
-      return base64Decode(base64Str);
+      return MemoryImage(base64Decode(imageStr));
     } catch (e) {
       return null;
     }
@@ -256,7 +257,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                       // Avatar Pequeno
                                       Builder(
                                         builder: (context) {
-                                          final Uint8List? imageBytes = user['decoded_image'] as Uint8List?;
+                                          final ImageProvider? imageProvider = user['decoded_image'] as ImageProvider?;
                                           final Widget fallbackText = Text(
                                             user['name'].toString().substring(0, 1).toUpperCase(),
                                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -265,8 +266,8 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                           return CircleAvatar(
                                             radius: 20,
                                             backgroundColor: Colors.blueGrey,
-                                            backgroundImage: imageBytes != null ? MemoryImage(imageBytes) : null,
-                                            child: imageBytes == null ? fallbackText : null,
+                                            backgroundImage: imageProvider,
+                                            child: imageProvider == null ? fallbackText : null,
                                           );
                                         }
                                       ),
@@ -378,7 +379,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
               // Avatar no topo do pilar
               Builder(
                 builder: (context) {
-                  final Uint8List? imageBytes = user['decoded_image'] as Uint8List?;
+                  final ImageProvider? imageProvider = user['decoded_image'] as ImageProvider?;
                   final Widget fallbackText = Text(
                     user['name'].toString().substring(0, 1).toUpperCase(),
                     style: TextStyle(
@@ -403,8 +404,8 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                     child: CircleAvatar(
                       radius: isFirst ? 35 : 25,
                       backgroundColor: AppColors.cardDark,
-                      backgroundImage: imageBytes != null ? MemoryImage(imageBytes) : null,
-                      child: imageBytes == null ? fallbackText : null,
+                      backgroundImage: imageProvider,
+                      child: imageProvider == null ? fallbackText : null,
                     ),
                   );
                 }
