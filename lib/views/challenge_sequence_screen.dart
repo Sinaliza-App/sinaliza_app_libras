@@ -16,7 +16,6 @@ import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
 import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
-
 import 'package:sinaliza_app_libras/widgets/streak_dialog.dart';
 
 // --- FUNÇÃO ISOLADA (FORA DA CLASSE) PARA NÃO TRAVAR A UI ---
@@ -24,16 +23,16 @@ String _processFrameInIsolate(Uint8List bytes) {
   return base64Encode(bytes);
 }
 
-class LessonDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> lesson;
+class ChallengeSequenceScreen extends StatefulWidget {
+  final List<Map<String, dynamic>> lessons;
 
-  const LessonDetailScreen({super.key, required this.lesson});
+  const ChallengeSequenceScreen({super.key, required this.lessons});
 
   @override
-  State<LessonDetailScreen> createState() => _LessonDetailScreenState();
+  State<ChallengeSequenceScreen> createState() => _ChallengeSequenceScreenState();
 }
 
-class _LessonDetailScreenState extends State<LessonDetailScreen> {
+class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
   // --- CÂMERA E INFERÊNCIA WEBSOCKET ---
   CameraController? _cameraController;
   bool _isCameraReady = false;
@@ -55,9 +54,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   int _secondsHeld = 0;
 
   // --- PROGRESSO E EFEITOS ---
-  bool _isSavingProgress = false;
   late ConfettiController _confettiController;
   final AudioPlayer _audioPlayer = AudioPlayer();
+
+  // --- DESAFIO SEQUENCIAL ---
+  int _currentIndex = 0;
+  int _correctCount = 0;
+  bool _isChallengeFinished = false;
+  int _challengeTimeLeft = 10;
+  Timer? _challengeTimer;
+  bool _isTransitioning = false;
 
   @override
   void initState() {
@@ -66,7 +72,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _initializeCamera();
     _connectWebSocket();
     _confettiController = ConfettiController(
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 2),
     );
   }
 
@@ -108,7 +114,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   void _extractTargetGesture() {
-    final title = widget.lesson['title'].toString();
+    final lesson = widget.lessons[_currentIndex];
+    final title = lesson['title'].toString();
     if (title.contains("Letra ")) {
       _targetGesture = title.split("Letra ").last.trim();
     } else {
@@ -117,13 +124,20 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     
     // Regra Inteligente: Se for movimento, o usuário ganha instantaneamente (0s).
     // Se for estático (Alfabeto), ele precisa segurar a pose (3s).
-    final lessonType = (widget.lesson['type'] ?? 'estatico').toString().toLowerCase();
+    final lessonType = (lesson['type'] ?? 'estatico').toString().toLowerCase();
     _isMovement = lessonType == 'movimento' || lessonType == 'dynamic';
     _secondsToHold = _isMovement ? 0 : 3;
+    _challengeTimeLeft = 10;
+    _isCorrect = false;
+    _firstDetectionTime = null;
+    _secondsHeld = 0;
+    _detectedGesture = "Nenhum";
+    _detectedConfidence = 0.0;
   }
 
   @override
   void dispose() {
+    _challengeTimer?.cancel();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
     _channel?.sink.close();
@@ -151,16 +165,76 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (!mounted) return;
       setState(() => _isCameraReady = true);
       _startVisionStream(); // Inicia o envio via WebSocket
+      _startChallengeTimer();
     } catch (e) {
       debugPrint("Erro ao iniciar câmera: $e");
     }
   }
 
+  void _startChallengeTimer() {
+    _challengeTimer?.cancel();
+    _challengeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _isCorrect || _isTransitioning || _isChallengeFinished) {
+        return; // Não cancelamos o timer, só ignoramos o tick se estiver transicionando
+      }
+      setState(() {
+        if (_challengeTimeLeft > 0) {
+          _challengeTimeLeft--;
+        } else {
+          _handleChallengeFailure();
+        }
+      });
+    });
+  }
+
+  Future<void> _handleChallengeFailure() async {
+    setState(() {
+      _isTransitioning = true;
+    });
+    
+    if (await Vibration.hasVibrator()) {
+      Vibration.vibrate(pattern: [0, 500, 200, 500]);
+    }
+    
+    // Registra erro silenciosamente no banco
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        await Supabase.instance.client.rpc<void>('increment_quiz_error', params: {
+          'p_user_id': userId,
+          'p_sign_id': widget.lessons[_currentIndex]['id']
+        });
+      }
+    } catch (e) {
+      debugPrint("Erro ao registrar falha no desafio: $e");
+    }
+
+    if (!mounted) return;
+    CustomSnackBar.showError(context, "Tempo Esgotado!");
+    await Future<void>.delayed(const Duration(seconds: 2));
+    
+    _nextChallenge();
+  }
+
+  void _nextChallenge() {
+    if (!mounted) return;
+    setState(() {
+      if (_currentIndex < widget.lessons.length - 1) {
+        _currentIndex++;
+        _extractTargetGesture();
+        _isTransitioning = false;
+      } else {
+        _isChallengeFinished = true;
+        _challengeTimer?.cancel();
+        _saveProgress(); // Salva pontuação final
+      }
+    });
+  }
+
  // --- NOVA LÓGICA WEBSOCKET COM ISOLATE ---
  void _startVisionStream() {
     _cameraController!.startImageStream((CameraImage image) async {
-      // Ignora se não estiver conectado, se já estiver processando ou se já acertou
-      if (!_isConnected || _isProcessingFrame || _isCorrect) return;
+      if (!_isConnected || _isProcessingFrame || _isCorrect || _isTransitioning || _isChallengeFinished) return;
 
       final now = DateTime.now();
       // Otimizamos para até 10 frames por segundo de processamento para maior fluidez
@@ -184,7 +258,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           'width': image.width,
           'height': image.height,
           'stride': plane.bytesPerRow,
-          'model_type': (widget.lesson['type'] ?? 'estatico').toString().toLowerCase() == 'movimento' ? 'movimento' : 'alfabeto'
+          'model_type': (widget.lessons[_currentIndex]['type'] ?? 'estatico').toString().toLowerCase() == 'movimento' ? 'movimento' : 'alfabeto'
         }));
       } catch (e) {
         debugPrint("Erro no processamento do frame: $e");
@@ -208,6 +282,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
  void _handleDetectionResult(String gesture, double confidence) async {
+    if (_isTransitioning || _isChallengeFinished) return;
     // Para movimentos confiamos 100% no backend (já que ele filtra a confianca), para estáticos > 0.6
     final String normalizedDetected = _normalizeGesture(gesture);
     final String normalizedTarget = _normalizeGesture(_targetGesture);
@@ -249,16 +324,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   void _onSuccess() async {
     setState(() {
       _isCorrect = true;
+      _isTransitioning = true;
+      _correctCount++;
     });
 
     _confettiController.play();
 
     if (await Vibration.hasVibrator()) {
       if (_isMovement) {
-        // Vibração dupla para movimento (impacto imediato)
         Vibration.vibrate(pattern: [0, 150, 100, 150]);
       } else {
-        // Vibração simples para estático
         Vibration.vibrate(duration: 500);
       }
     }
@@ -267,6 +342,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     } catch (e) {
       debugPrint("Erro ao tocar som: $e");
     }
+    
+    await Future<void>.delayed(const Duration(seconds: 2));
+    _nextChallenge();
   }
 
   // --- NOVA FUNÇÃO: REPORTAR (DENÚNCIA) ---
@@ -305,64 +383,82 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   Future<void> _saveProgress() async {
-    if (!_isCorrect) return;
+    final int totalXp = _correctCount * 20;
+    
+    // Mostra tela de fim de jogo
+    if (!mounted) return;
+    showDialog<dynamic>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Desafio Concluído!', style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold, fontSize: 24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.stars, color: AppColors.neonGreen, size: 80),
+            const SizedBox(height: 16),
+            Text(
+              'Você acertou $_correctCount de ${widget.lessons.length}!',
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '+$totalXp XP',
+              style: const TextStyle(color: AppColors.neonGreen, fontSize: 32, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // fecha modal
+                Navigator.pop(context, true); // fecha tela
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonGreen, padding: const EdgeInsets.symmetric(vertical: 16)),
+              child: const Text('VOLTAR', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          )
+        ],
+      ),
+    );
 
-    setState(() {
-      _isSavingProgress = true;
-    });
+    if (totalXp == 0) return; // Nao salva no banco se não acertou nada
 
     final String apiUrl = '$apiBaseUrl/progress';
-
     try {
+      // Nota: Podemos estar salvando no progresso da última lição, ou idealmente ter uma tabela separada.
+      // Aqui salvaremos em nome da última lição só para creditar o XP.
       final response = await ApiService.post(
             apiUrl,
-            body: json.encode({'lesson_id': widget.lesson['id'], 'score': 10}),
+            body: json.encode({'lesson_id': widget.lessons.last['id'], 'score': totalXp}),
           )
           .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
       final responseData = json.decode(response.body);
-
       final currentStreak = Provider.of<UserProvider>(context, listen: false).user?.streakCount ?? 0;
-      bool showedCelebration = false;
 
-      // Atualiza a ofensiva em qualquer caso de sucesso (201 ou 200)
       if (responseData['streak_count'] != null) {
         final int newStreak = responseData['streak_count'] as int;
         Provider.of<UserProvider>(context, listen: false).updateStreak(newStreak);
-
-        // Se a ofensiva aumentou de verdade (usuário concluiu a primeira lição do dia)
+        
         if (newStreak > currentStreak) {
           await StreakDialog.show(context, newStreak);
-          showedCelebration = true;
-          if (!mounted) return;
         }
       }
 
-      if (response.statusCode == 201) {
-        Provider.of<UserProvider>(context, listen: false).addScore(10);
-        if (!showedCelebration) {
-          CustomSnackBar.showSuccess(
-            context,
-            (responseData['message'] as String?) ?? 'Progresso salvo! +10 XP',
-          );
-        }
-        Navigator.pop(context, true);
-      } else if (response.statusCode == 200 || response.statusCode == 409) {
-        if (!showedCelebration) {
-          CustomSnackBar.showWarning(
-            context,
-            (responseData['message'] as String?) ?? 'Você já concluiu esta lição.',
-          );
-        }
-        Navigator.pop(context, true);
-      } else {
-        CustomSnackBar.showError(context, 'Erro ao salvar progresso.');
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        if (!mounted) return;
+        Provider.of<UserProvider>(context, listen: false).addScore(totalXp);
       }
     } catch (e) {
-      if (mounted) CustomSnackBar.showError(context, 'Erro: $e');
-    } finally {
-      if (mounted) setState(() => _isSavingProgress = false);
+      debugPrint("Erro ao salvar progresso do desafio: $e");
     }
   }
 
@@ -374,9 +470,15 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String lessonTitle = (widget.lesson['title'] as String?) ?? 'Lição';
-    // Prioriza os campos onde o GIF ou animação podem estar armazenados antes de pegar a foto estática
-    final String? helpImageUrl = (widget.lesson['gif_url'] as String?) ?? (widget.lesson['example_image_url'] as String?) ?? (widget.lesson['video_url'] as String?) ?? (widget.lesson['thumbnail_url'] as String?);
+    if (_isChallengeFinished) {
+      return const Scaffold(
+        backgroundColor: AppColors.darkBG,
+        body: Center(child: CircularProgressIndicator(color: AppColors.neonGreen)),
+      );
+    }
+
+    final lesson = widget.lessons[_currentIndex];
+    final String lessonTitle = "Sinal ${_currentIndex + 1} de ${widget.lessons.length}";
     final Color statusColor = _getStatusColor();
 
     return Scaffold(
@@ -404,15 +506,18 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       child: Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: () {
+                              _challengeTimer?.cancel();
+                              Navigator.pop(context);
+                            },
                           ),
                           Expanded(
                             child: Text(
                               lessonTitle,
                               textAlign: TextAlign.center,
                               style: const TextStyle(
-                                color: AppColors.neonGreen,
+                                color: AppColors.neonOrange,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 20,
                               ),
@@ -426,10 +531,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               if (desc != null && desc.trim().isNotEmpty) {
                                 try {
                                   final userId = Supabase.instance.client.auth.currentUser?.id;
+                                  if (userId != null) {
+                                    await Supabase.instance.client.rpc<void>('increment_quiz_error', params: {
+                                      'p_user_id': userId,
+                                      'p_sign_id': lesson['id'],
+                                    });
+                                  }
                                   await Supabase.instance.client.from('reports').insert({
                                     'user_id': userId,
                                     'target_type': 'lesson',
-                                    'target_id': widget.lesson['id'],
+                                    'target_id': lesson['id'],
                                     'description': desc,
                                   });
                                   if (!context.mounted) return;
@@ -441,12 +552,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               }
                             },
                           ),
-                          helpImageUrl != null
-                              ? IconButton(
-                                  icon: const Icon(Icons.help_outline, color: AppColors.neonOrange),
-                                  onPressed: () => _showHelpDialog(context, helpImageUrl),
-                                )
-                              : const SizedBox(width: 0),
                         ],
                       ),
                     ),
@@ -454,6 +559,32 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     // Meta
                     Column(
                       children: [
+                        if (!_isCorrect && !_isTransitioning) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _challengeTimeLeft <= 3 ? AppColors.neonRed.withValues(alpha: 0.2) : AppColors.neonOrange.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: _challengeTimeLeft <= 3 ? AppColors.neonRed : AppColors.neonOrange),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.timer_outlined, color: _challengeTimeLeft <= 3 ? AppColors.neonRed : AppColors.neonOrange, size: 24),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "00:${_challengeTimeLeft.toString().padLeft(2, '0')}",
+                                  style: TextStyle(
+                                    color: _challengeTimeLeft <= 3 ? AppColors.neonRed : AppColors.neonOrange,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         Text(
                           _secondsToHold == 0 ? "Faça o movimento para:" : "Faça o sinal para:",
                           style: TextStyle(
@@ -468,7 +599,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             fontSize: 42,
                             fontWeight: FontWeight.w900,
                             shadows: [
-                              Shadow(color: AppColors.neonGreen.withValues(alpha: 0.6), blurRadius: 15),
+                              Shadow(color: AppColors.neonOrange.withValues(alpha: 0.6), blurRadius: 15),
                             ],
                           ),
                         ),
@@ -639,38 +770,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
                     const SizedBox(height: 20),
 
-                    // Botão
-                    _isSavingProgress
-                        ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
-                        : SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton.icon(
-                              icon: Icon(
-                                _isCorrect ? Icons.check_circle : Icons.lock,
-                                color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
-                              ),
-                              label: Text(
-                                _isCorrect ? 'CONCLUIR LIÇÃO (+10 XP)' : 'Acerte o sinal para liberar',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: _isCorrect ? Colors.black : Colors.white.withValues(alpha: 0.5),
-                                ),
-                              ),
-                              onPressed: _isCorrect ? _saveProgress : null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _isCorrect ? AppColors.neonGreen : AppColors.cardDark,
-                                elevation: _isCorrect ? 4 : 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  side: BorderSide(
-                                    color: _isCorrect ? Colors.transparent : Colors.white.withValues(alpha: 0.1),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                    // Botão (removido, o salto é automático, ou mostra infos extras aqui)
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -696,55 +796,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  void _showHelpDialog(BuildContext context, String imageUrl) {
-    final bool isNetwork = imageUrl.startsWith('http');
-
-    showDialog<dynamic>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.darkBG2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Como fazer o sinal', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: isNetwork 
-                  ? Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.image_not_supported, color: Colors.grey, size: 100);
-                      },
-                    )
-                  : Image.asset(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.image_not_supported, color: Colors.grey, size: 100);
-                      },
-                    ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Assista ao movimento e tente repeti-lo para a câmera.', 
-                style: TextStyle(color: Colors.white70),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('ENTENDI', style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
     );
   }
 }

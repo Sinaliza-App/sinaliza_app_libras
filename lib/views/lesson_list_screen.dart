@@ -10,6 +10,9 @@ import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:sinaliza_app_libras/views/challenge_sequence_screen.dart';
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
+
 class CombinedLessonData {
   final List<Map<String, dynamic>> lessons;
   final Set<int> completedLessonIds;
@@ -305,8 +308,92 @@ class _LessonListScreenState extends State<LessonListScreen> {
                         horizontal: 20,
                         vertical: 10,
                       ),
-                      itemCount: lessons.length,
+                      itemCount: lessons.length + 1, // +1 para o Desafio Final
                       itemBuilder: (context, index) {
+                        if (index == lessons.length) {
+                          // CARD DO DESAFIO FINAL (BOSS)
+                          final bool isBossUnlocked = lessons.every((l) => completed.contains(l["id"]));
+                          
+                          return FadeInSlide(
+                            duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
+                            yOffset: 20.0,
+                            child: GestureDetector(
+                              onTap: () async {
+                                HapticFeedback.lightImpact();
+                                if (isBossUnlocked) {
+                                  // Abre o Desafio Sequencial com as lições deste módulo
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute<dynamic>(
+                                      builder: (context) => ChallengeSequenceScreen(lessons: lessons.where((l) => l["is_draft"] != true).toList()),
+                                    ),
+                                  );
+                                  if (mounted) _refreshData();
+                                } else {
+                                  CustomSnackBar.showWarning(context, "Conclua todas as lições acima para desbloquear!");
+                                }
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(top: 20, bottom: 40),
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  gradient: isBossUnlocked
+                                      ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange])
+                                      : LinearGradient(colors: [Colors.grey[800]!, Colors.grey[900]!]),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: isBossUnlocked ? Colors.yellow : Colors.grey[700]!,
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    if (isBossUnlocked)
+                                      BoxShadow(
+                                        color: Colors.orange.withValues(alpha: 0.4),
+                                        blurRadius: 20,
+                                        spreadRadius: 5,
+                                      ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isBossUnlocked ? Icons.local_fire_department_rounded : Icons.lock_rounded,
+                                      color: isBossUnlocked ? Colors.yellow : Colors.grey[500],
+                                      size: 40,
+                                    ),
+                                    const SizedBox(width: 20),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Desafio Final",
+                                            style: TextStyle(
+                                              color: isBossUnlocked ? Colors.white : Colors.grey[400],
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            isBossUnlocked 
+                                                ? "Prove que domina o módulo!" 
+                                                : "Bloqueado",
+                                            style: TextStyle(
+                                              color: isBossUnlocked ? Colors.white.withValues(alpha: 0.9) : Colors.grey[500],
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
                         final lesson = lessons[index];
                         final bool isDone = completed.contains(lesson["id"]);
                         final bool isDraft = lesson["is_draft"] == true;
