@@ -81,6 +81,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         email: email,
         password: password,
         data: {'name': name},
+        emailRedirectTo: 'sinaliza://login',
       );
 
       if (!mounted) return;

@@ -26,7 +26,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     });
 
     try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'sinaliza://reset-password',
+      );
       if (!mounted) return;
       CustomSnackBar.showSuccess(
         context,
