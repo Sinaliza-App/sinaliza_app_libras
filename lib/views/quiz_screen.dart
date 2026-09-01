@@ -64,67 +64,145 @@ class _QuizScreenState extends State<QuizScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.darkBG,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          "Desafios",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 40),
-              const Text(
-                "ZONA DE TESTES",
-                style: TextStyle(
-                  color: AppColors.neonGreen,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                "Escolha seu Desafio",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 60),
-
-              // Botão Quiz Teórico
-              _buildMenuCard(
-                title: "Quiz Teórico",
-                description: "Teste seus conhecimentos de múltipla escolha com imagens e GIFs.",
-                icon: Icons.image_search_rounded,
-                color: AppColors.neonBlue,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<dynamic>(
-                      builder: (context) => const TheoreticalQuizScreen(),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Cabeçalho da Arena
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.neonGreen.withValues(alpha: 0.1),
+                        Colors.transparent,
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 24),
-
-              // Botão Desafio Prático
-              _isLoadingChallenge
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.neonOrange))
-                  : _buildMenuCard(
-                      title: "Desafio Prático",
-                      description: "Ligue a câmera e mostre o que sabe em sequências de 10 segundos!",
-                      icon: Icons.local_fire_department_rounded,
-                      color: AppColors.neonOrange,
-                      onTap: _startChallengeMode,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: AppColors.neonGreen.withValues(alpha: 0.2),
+                      width: 1,
                     ),
-            ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.neonGreen.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.sports_esports_rounded,
+                          color: AppColors.neonGreen,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "ARENA SINALIZA",
+                        style: TextStyle(
+                          color: AppColors.neonGreen,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Escolha seu Treinamento",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 40),
+  
+                // Botão Quiz Teórico
+                _buildAnimatedCard(
+                  delay: 0.1,
+                  child: _buildMenuCard(
+                    title: "Quiz Teórico",
+                    description: "Teste seus conhecimentos de múltipla escolha com imagens e GIFs.",
+                    icon: Icons.image_search_rounded,
+                    color: AppColors.neonBlue,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<dynamic>(
+                          builder: (context) => const TheoreticalQuizScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+  
+                const SizedBox(height: 24),
+  
+                // Botão Desafio Prático
+                _buildAnimatedCard(
+                  delay: 0.2,
+                  child: _isLoadingChallenge
+                      ? const Center(child: CircularProgressIndicator(color: AppColors.neonOrange))
+                      : _buildMenuCard(
+                          title: "Desafio Prático",
+                          description: "Ligue a câmera e mostre o que sabe em sequências de 10 segundos!",
+                          icon: Icons.local_fire_department_rounded,
+                          color: AppColors.neonOrange,
+                          onTap: _startChallengeMode,
+                        ),
+                ),
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAnimatedCard({required double delay, required Widget child}) {
+    return TweenAnimationBuilder(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutBack,
+      builder: (context, double value, _) {
+        return Transform.scale(
+          scale: value,
+          child: Opacity(
+            opacity: value.clamp(0.0, 1.0),
+            child: child,
+          ),
+        );
+      },
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:io'; // Para verificar a plataforma
+import 'dart:async'; // Para StreamSubscription
 import 'package:sqflite_common_ffi/sqflite_ffi.dart'; // Para banco de dados no PC
 import 'package:sinaliza_app_libras/views/splash_screen.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:sinaliza_app_libras/theme/app_theme.dart';
+import 'package:sinaliza_app_libras/views/update_password_screen.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
@@ -36,8 +38,36 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final StreamSubscription<AuthState> _authStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.passwordRecovery) {
+        // Usa o navigatorKey para redirecionar de qualquer lugar do app
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute<dynamic>(builder: (context) => const UpdatePasswordScreen()),
+          (route) => false,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

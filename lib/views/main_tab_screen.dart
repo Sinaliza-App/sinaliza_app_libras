@@ -68,7 +68,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.quiz_rounded),
-              label: 'Quiz',
+              label: 'Desafios',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.emoji_events_rounded),

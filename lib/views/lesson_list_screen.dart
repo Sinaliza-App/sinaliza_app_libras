@@ -312,7 +312,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                       itemBuilder: (context, index) {
                         if (index == lessons.length) {
                           // CARD DO DESAFIO FINAL (BOSS)
-                          final bool isBossUnlocked = lessons.every((l) => completed.contains(l["id"]));
+                          final bool isBossUnlocked = lessons.where((l) => l["is_draft"] != true).every((l) => completed.contains(l["id"]));
                           
                           return FadeInSlide(
                             duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),

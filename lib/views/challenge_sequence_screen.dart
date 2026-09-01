@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
@@ -385,47 +386,162 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
   Future<void> _saveProgress() async {
     final int totalXp = _correctCount * 20;
     
-    // Mostra tela de fim de jogo
     if (!mounted) return;
-    showDialog<dynamic>(
+    
+    // Calcula o percentual e define a identidade visual do resultado
+    final double percentage = widget.lessons.isEmpty ? 0 : _correctCount / widget.lessons.length;
+    final String emoji;
+    final String title;
+    final Color accentColor;
+    final List<Color> confettiColors;
+
+    if (percentage == 1.0) {
+      emoji = '🏆';
+      title = 'PERFEITO!';
+      accentColor = AppColors.neonGold;
+      confettiColors = const [AppColors.neonGold, Colors.white, Colors.yellow];
+    } else if (percentage >= 0.6) {
+      emoji = '🔥';
+      title = 'MUITO BOM!';
+      accentColor = AppColors.neonGreen;
+      confettiColors = const [AppColors.neonGreen, AppColors.neonBlue, AppColors.neonOrange];
+    } else if (percentage >= 0.3) {
+      emoji = '💪';
+      title = 'CONTINUE PRATICANDO!';
+      accentColor = AppColors.neonOrange;
+      confettiColors = const [AppColors.neonOrange, AppColors.neonRed, Colors.white];
+    } else {
+      emoji = '📚';
+      title = 'ESTUDE MAIS!';
+      accentColor = AppColors.neonRed;
+      confettiColors = const [AppColors.neonRed, Colors.white, Colors.grey];
+    }
+    
+    // Mostra tela de fim de jogo com estilo moderno
+    showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Desafio Concluído!', style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold, fontSize: 24)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.stars, color: AppColors.neonGreen, size: 80),
-            const SizedBox(height: 16),
-            Text(
-              'Você acertou $_correctCount de ${widget.lessons.length}!',
-              style: const TextStyle(color: Colors.white, fontSize: 18),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '+$totalXp XP',
-              style: const TextStyle(color: AppColors.neonGreen, fontSize: 32, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context); // fecha modal
-                Navigator.pop(context, true); // fecha tela
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonGreen, padding: const EdgeInsets.symmetric(vertical: 16)),
-              child: const Text('VOLTAR', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
-          )
-        ],
-      ),
+      barrierColor: AppColors.darkBG.withValues(alpha: 0.95),
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (context, anim1, anim2) {
+        final confettiController = ConfettiController(duration: const Duration(seconds: 3))..play();
+        
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: confettiController,
+                  blastDirection: pi / 2,
+                  maxBlastForce: 5,
+                  minBlastForce: 2,
+                  emissionFrequency: 0.05,
+                  numberOfParticles: 50,
+                  gravity: 0.1,
+                  colors: confettiColors,
+                ),
+              ),
+              Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(emoji, style: const TextStyle(fontSize: 72)),
+                      const SizedBox(height: 16),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: accentColor,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardDark,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: accentColor.withValues(alpha: 0.5), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accentColor.withValues(alpha: 0.1),
+                              blurRadius: 30,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Sua Pontuação',
+                              style: TextStyle(color: Colors.white70, fontSize: 16),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '$_correctCount / ${widget.lessons.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 48,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Divider(color: Colors.white24, height: 32),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.flash_on_rounded, color: AppColors.neonOrange, size: 28),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '+$totalXp XP',
+                                  style: const TextStyle(
+                                    color: AppColors.neonOrange,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 60,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            confettiController.dispose();
+                            Navigator.pop(context); // fecha modal
+                            Navigator.pop(context, true); // fecha tela
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentColor,
+                            foregroundColor: Colors.black,
+                            elevation: 8,
+                            shadowColor: accentColor.withValues(alpha: 0.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          ),
+                          child: const Text(
+                            'VOLTAR AO MENU',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
 
     if (totalXp == 0) return; // Nao salva no banco se não acertou nada
