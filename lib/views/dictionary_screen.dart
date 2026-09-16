@@ -7,6 +7,7 @@ import 'package:sinaliza_app_libras/constants.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
 
 class DictionaryScreen extends StatefulWidget {
   const DictionaryScreen({super.key});
@@ -189,26 +190,13 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
                 ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
                 : _filteredSigns.isEmpty
                     ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _searchQuery.isEmpty ? Icons.menu_book_rounded : Icons.search_off_rounded,
-                              size: 80,
-                              color: AppColors.neonGreen.withValues(alpha: 0.3),
-                            ),
-                            const SizedBox(height: 20),
-                            Text(
-                              _searchQuery.isEmpty 
-                                  ? 'Nenhum sinal encontrado no banco de dados.'
-                                  : 'Nenhum sinal para "$_searchQuery"',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+                        child: EmptyStateWidget(
+                          icon: _searchQuery.isEmpty ? Icons.menu_book_rounded : Icons.search_off_rounded,
+                          title: _searchQuery.isEmpty ? 'Dicionário Vazio' : 'Sinal não encontrado',
+                          subtitle: _searchQuery.isEmpty 
+                              ? 'Nenhum sinal encontrado no banco de dados.'
+                              : 'Não encontramos nenhum sinal para "$_searchQuery". Tente outra palavra.',
+                          color: AppColors.neonGreen,
                         ),
                       )
                     : ListView.builder(

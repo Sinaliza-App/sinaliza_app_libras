@@ -16,6 +16,7 @@ import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 import 'package:sinaliza_app_libras/views/change_password_screen.dart';
 
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/views/achievements_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -65,39 +66,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
 
 
-  // Lista de conquistas
-  final List<Map<String, dynamic>> _badges = [
-    {
-      'title': 'Aprendiz',
-      'xpRequired': 10,
-      'icon': Icons.star_rounded,
-      'color': AppColors.neonBlue,
-    },
-    {
-      'title': 'Curioso',
-      'xpRequired': 100,
-      'icon': Icons.visibility,
-      'color': AppColors.neonGreen,
-    },
-    {
-      'title': 'Dedicado',
-      'xpRequired': 300,
-      'icon': Icons.local_fire_department_rounded,
-      'color': AppColors.neonRed,
-    },
-    {
-      'title': 'Avançado',
-      'xpRequired': 600,
-      'icon': Icons.workspace_premium_rounded,
-      'color': Colors.amber,
-    },
-    {
-      'title': 'Mestre',
-      'xpRequired': 1100,
-      'icon': Icons.diamond_rounded,
-      'color': Colors.purpleAccent,
-    },
-  ];
 
   Map<String, dynamic> _calculateLevel(int totalScore) {
     int level = 1;
@@ -129,104 +97,7 @@ class _ProfilePageState extends State<ProfilePage> {
     };
   } 
 
-  Widget _buildBadgesGrid(int userXp) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "MINHAS CONQUISTAS",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 0.8,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: _badges.length,
-          itemBuilder: (context, index) {
-            final badge = _badges[index];
-            final int xpRequired = badge['xpRequired'] as int;
-            final bool isUnlocked = userXp >= xpRequired;
-            final Color badgeColor = badge['color'] as Color;
-            
-            return Container(
-              decoration: BoxDecoration(
-                color: AppColors.cardDark,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isUnlocked ? badgeColor.withValues(alpha: 0.5) : Colors.grey.withValues(alpha: 0.2),
-                  width: 1.5,
-                ),
-                boxShadow: isUnlocked
-                    ? [
-                        BoxShadow(
-                          color: badgeColor.withValues(alpha: 0.2),
-                          blurRadius: 15,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : [],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        badge['icon'] as IconData,
-                        color: isUnlocked ? badgeColor : Colors.grey.withValues(alpha: 0.2),
-                        size: 36,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        badge['title'] as String,
-                        style: TextStyle(
-                          color: isUnlocked ? Colors.white : Colors.grey.withValues(alpha: 0.4),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "$xpRequired XP",
-                        style: TextStyle(
-                          color: isUnlocked ? badgeColor : Colors.grey.withValues(alpha: 0.3),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!isUnlocked)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Icon(
-                        Icons.lock_rounded,
-                        color: Colors.grey.withValues(alpha: 0.4),
-                        size: 14,
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
+
 
   @override
   void initState() {
@@ -499,19 +370,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         letterSpacing: 1.5,
                       ),
                     ),
-                    
-                    // --- AQUI ESTÁ A LIXEIRA (DELETE) ---
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.neonRed.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppColors.neonRed),
-                        onPressed: _deleteAccount,
-                        tooltip: "Excluir Conta",
-                      ),
-                    ),
+                    const SizedBox(width: 40),
                   ],
                 ),
               ),
@@ -651,7 +510,95 @@ class _ProfilePageState extends State<ProfilePage> {
 
                             const SizedBox(height: 30),
 
-                            // --- NOVO: CARTÃO DE OFENSIVA (FOGUINHO) ---
+                            const SizedBox(height: 30),
+
+                            // --- SEÇÃO: ESTATÍSTICAS ---
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "ESTATÍSTICAS",
+                                style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // BOTÃO PARA TELA DE CONQUISTAS
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute<dynamic>(builder: (context) => const AchievementsScreen()),
+                                );
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      AppColors.neonGold.withValues(alpha: 0.15),
+                                      AppColors.neonPurple.withValues(alpha: 0.08),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: AppColors.neonGold.withValues(alpha: 0.4),
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.neonGold.withValues(alpha: 0.1),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.neonGold.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: const Icon(
+                                        Icons.emoji_events_rounded,
+                                        color: AppColors.neonGold,
+                                        size: 28,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    const Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Minhas Conquistas",
+                                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            "Veja suas medalhas e progresso",
+                                            style: TextStyle(color: Colors.white54, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.arrow_forward_ios_rounded,
+                                      color: AppColors.neonGold.withValues(alpha: 0.6),
+                                      size: 18,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 16),
+
+                            // CARTÃO DE OFENSIVA (FOGUINHO)
                             Builder(
                               builder: (context) {
                                 final int streak = user?.streakCount ?? 0;
@@ -694,23 +641,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                           children: [
                                             Text(
                                               isLit ? "$streak DIAS SEGUIDOS!" : "0 DIAS",
-                                              style: TextStyle(
-                                                color: isLit ? Colors.orange : Colors.grey,
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.w900,
-                                                letterSpacing: 1.0,
-                                              ),
+                                              style: TextStyle(color: isLit ? Colors.orange : Colors.grey, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1.0),
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
                                               isLit 
                                                 ? "Você está pegando fogo! Continue assim." 
                                                 : "Faça uma lição hoje para acender sua ofensiva!",
-                                              style: TextStyle(
-                                                color: Colors.white.withValues(alpha: 0.7),
-                                                fontSize: 13,
-                                                height: 1.3,
-                                              ),
+                                              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13, height: 1.3),
                                             ),
                                           ],
                                         ),
@@ -721,9 +659,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               }
                             ),
 
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
 
-                            // 3. CARD DE NÍVEL E XP (ATUALIZADO)
+                            // CARD DE NÍVEL E XP
                             Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(24),
@@ -751,19 +689,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                   
                                   return Column(
                                     children: [
-                                      // Título do Nível
                                       Text(
                                         "NÍVEL $level",
-                                        style: const TextStyle(
-                                          color: AppColors.neonBlue,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 2,
-                                        ),
+                                        style: const TextStyle(color: AppColors.neonBlue, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2),
                                       ),
                                       const SizedBox(height: 10),
-                                      
-                                      // XP Grande
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -771,27 +701,16 @@ class _ProfilePageState extends State<ProfilePage> {
                                         children: [
                                           Text(
                                             "${user?.totalScore ?? 0}",
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 42,
-                                              fontWeight: FontWeight.w900,
-                                            ),
+                                            style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900),
                                           ),
                                           const SizedBox(width: 8),
                                           Text(
                                             "/ $nextScore XP",
-                                            style: TextStyle(
-                                              color: Colors.white.withValues(alpha: 0.4),
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                            style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 16, fontWeight: FontWeight.bold),
                                           ),
                                         ],
                                       ),
-                                      
                                       const SizedBox(height: 16),
-
-                                      // Barra de Progresso do Nível
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(10),
                                         child: LinearProgressIndicator(
@@ -801,23 +720,30 @@ class _ProfilePageState extends State<ProfilePage> {
                                           color: AppColors.neonGreen,
                                         ),
                                       ),
-                                      
                                       const SizedBox(height: 8),
                                       Text(
                                         "Faltam ${nextScore - (user?.totalScore ?? 0)} XP para o próximo nível",
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.4),
-                                          fontSize: 12,
-                                        ),
+                                        style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 12),
                                       ),
                                     ],
                                   );
                                 }
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            
+                            const SizedBox(height: 30),
 
-                            // --- MUDAR SENHA ---
+                            // --- SEÇÃO: CONTA ---
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "CONFIGURAÇÕES E CONTA",
+                                style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // MUDAR SENHA
                             InkWell(
                               onTap: () {
                                 Navigator.push(
@@ -832,9 +758,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 decoration: BoxDecoration(
                                   color: AppColors.neonBlue.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppColors.neonBlue.withValues(alpha: 0.5),
-                                  ),
+                                  border: Border.all(color: AppColors.neonBlue.withValues(alpha: 0.5)),
                                 ),
                                 child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -843,25 +767,16 @@ class _ProfilePageState extends State<ProfilePage> {
                                     SizedBox(width: 12),
                                     Text(
                                       "Definir / Alterar Senha",
-                                      style: TextStyle(
-                                        color: AppColors.neonBlue,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: TextStyle(color: AppColors.neonBlue, fontSize: 16, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 30),
+                            
+                            const SizedBox(height: 12),
 
-                            // --- GRID DE CONQUISTAS ---
-                            _buildBadgesGrid(user?.totalScore ?? 0),
-                            const SizedBox(height: 40),
-
-                            const SizedBox(height: 16),
-
-                            // 4. BOTÃO DE LOGOUT
+                            // BOTÃO DE LOGOUT
                             InkWell(
                               onTap: () => _logout(context),
                               borderRadius: BorderRadius.circular(20),
@@ -869,24 +784,46 @@ class _ProfilePageState extends State<ProfilePage> {
                                 height: 60,
                                 width: double.infinity,
                                 decoration: BoxDecoration(
-                                  color: AppColors.neonRed.withValues(alpha: 0.1),
+                                  color: AppColors.cardDark,
                                   borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppColors.neonRed.withValues(alpha: 0.5),
-                                  ),
+                                  border: Border.all(color: Colors.white24),
                                 ),
                                 child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.logout_rounded, color: AppColors.neonRed),
+                                    Icon(Icons.logout_rounded, color: Colors.white70),
                                     SizedBox(width: 12),
                                     Text(
                                       "Sair da Conta",
-                                      style: TextStyle(
-                                        color: AppColors.neonRed,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 12),
+
+                            // BOTÃO DE EXCLUIR CONTA
+                            InkWell(
+                              onTap: _deleteAccount,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                height: 60,
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: AppColors.neonRed.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: AppColors.neonRed.withValues(alpha: 0.5)),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.delete_outline_rounded, color: AppColors.neonRed),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      "Excluir Conta Permanentemente",
+                                      style: TextStyle(color: AppColors.neonRed, fontSize: 16, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),

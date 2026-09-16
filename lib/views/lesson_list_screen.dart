@@ -8,6 +8,7 @@ import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:flutter/services.dart';
 import 'package:sinaliza_app_libras/views/profile_page.dart';
 import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/views/challenge_sequence_screen.dart';
@@ -283,11 +284,11 @@ class _LessonListScreenState extends State<LessonListScreen> {
                     }
 
                     if (!snapshot.hasData) {
-                      return const Center(
-                        child: Text(
-                          'Nenhuma lição encontrada.',
-                          style: TextStyle(color: Colors.white70),
-                        ),
+                      return const EmptyStateWidget(
+                        icon: Icons.search_off_rounded,
+                        title: 'Nenhuma lição encontrada',
+                        subtitle: 'Não foi possível carregar as lições deste módulo.',
+                        color: AppColors.neonRed,
                       );
                     }
 
@@ -295,11 +296,11 @@ class _LessonListScreenState extends State<LessonListScreen> {
                     final completed = snapshot.data!.completedLessonIds;
 
                     if (lessons.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'Nenhuma lição neste módulo.',
-                          style: TextStyle(color: Colors.white70),
-                        ),
+                      return const EmptyStateWidget(
+                        icon: Icons.auto_stories_rounded,
+                        title: 'Módulo vazio',
+                        subtitle: 'Este módulo ainda não tem lições. Volte em breve!',
+                        color: AppColors.neonBlue,
                       );
                     }
 

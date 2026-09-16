@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
-import 'package:sinaliza_app_libras/theme/app_colors.dart'; // Seu arquivo de IP
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
 
 // Removido controle global obsoleto
 
@@ -142,7 +143,12 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
             : _ranking.isEmpty
-                ? const Center(child: Text("Nenhum aluno pontuou ainda.", style: TextStyle(color: Colors.white)))
+                ? const EmptyStateWidget(
+                    icon: Icons.emoji_events_rounded,
+                    title: 'O pódio está vazio!',
+                    subtitle: 'Seja o primeiro a pontuar completando lições e desafios.',
+                    color: AppColors.neonGold,
+                  )
                 : Column(
                     children: [
                       const SizedBox(height: 100), // Espaço para a AppBar

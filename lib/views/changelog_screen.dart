@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
 import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -114,15 +115,11 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator(color: AppColors.neonBlue))
                     : _notifications.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.notifications_off_outlined, size: 80, color: Colors.white.withValues(alpha: 0.2)),
-                                const SizedBox(height: 20),
-                                const Text("Tudo limpo por aqui!", style: TextStyle(color: Colors.white70, fontSize: 16)),
-                              ],
-                            ),
+                        ? const EmptyStateWidget(
+                            icon: Icons.notifications_off_outlined,
+                            title: "Tudo limpo por aqui!",
+                            subtitle: "Você não tem novas notificações no momento.",
+                            color: AppColors.neonBlue,
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),

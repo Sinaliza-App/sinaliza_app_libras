@@ -41,9 +41,9 @@ class LessonInstructionScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                FadeInSlide(
-                  duration: const Duration(milliseconds: 400),
-                  child: const Text(
+                const FadeInSlide(
+                  duration: Duration(milliseconds: 400),
+                  child: Text(
                     "INSTRUÇÕES DA LIÇÃO",
                     style: TextStyle(
                       color: Colors.white60, 

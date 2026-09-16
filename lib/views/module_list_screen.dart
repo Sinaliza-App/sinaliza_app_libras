@@ -16,6 +16,7 @@ import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
 
 class ModuleListScreen extends StatefulWidget {
   const ModuleListScreen({super.key});
@@ -362,8 +363,11 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
 
         final modules = snapshot.data!;
         if (modules.isEmpty) {
-          return const Center(
-            child: Text('Nenhum módulo encontrado.', style: TextStyle(color: Colors.white70)),
+          return const EmptyStateWidget(
+            icon: Icons.school_rounded,
+            title: 'Nenhum módulo disponível',
+            subtitle: 'Os módulos de Libras serão adicionados em breve. Fique ligado!',
+            color: AppColors.neonGreen,
           );
         }
 
