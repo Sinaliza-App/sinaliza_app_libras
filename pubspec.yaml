@@ -38,6 +38,7 @@ dependencies:
   image_cropper: ^12.2.1
   font_awesome_flutter: ^11.0.0
   google_sign_in: ^7.2.0
+  onnxruntime: ^1.4.1
 
 dev_dependencies:
   flutter_test:
@@ -76,4 +77,5 @@ flutter:
     - assets/images/       # (Para a logo, se tiver)
     - assets/tutorials/
     - assets/sounds/    # (Para as lições)
+    - assets/models/
     - .env
