@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sinaliza_app_libras/services/libras_inference_service.dart';
 import 'package:flutter/services.dart';

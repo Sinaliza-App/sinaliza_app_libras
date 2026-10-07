@@ -692,7 +692,7 @@ class _TheoreticalQuizScreenState extends State<TheoreticalQuizScreen> with Tick
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: ListView.builder(
-              physics: const NeverScrollableScrollPhysics(),
+              physics: const BouncingScrollPhysics(),
               itemCount: options.length,
               itemBuilder: (context, index) {
                 final option = options[index];

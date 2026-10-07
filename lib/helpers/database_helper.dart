@@ -68,9 +68,11 @@ class DatabaseHelper {
 
   Future<int> insertUser(Map<String, dynamic> row) async {
     final db = await database;
+    final rowToInsert = Map<String, dynamic>.from(row);
+    rowToInsert['password_hash'] ??= '';
     return await db.insert(
       'users',
-      row,
+      rowToInsert,
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }

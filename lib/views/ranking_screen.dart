@@ -14,7 +14,10 @@ class RankingScreen extends StatefulWidget {
   State<RankingScreen> createState() => _RankingScreenState();
 }
 
-class _RankingScreenState extends State<RankingScreen> with TickerProviderStateMixin {
+class _RankingScreenState extends State<RankingScreen> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   List<dynamic> _ranking = [];
   bool _isLoading = true;
 
@@ -118,6 +121,11 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    final double screenHeight = MediaQuery.of(context).size.height;
+    final double topSpacing = MediaQuery.of(context).padding.top + kToolbarHeight + 10;
+    final double podiumHeight = (screenHeight * 0.40).clamp(280.0, 360.0);
+
     return Scaffold(
       extendBodyBehindAppBar: true, // Faz o degradê ir até o topo
       appBar: AppBar(
@@ -151,14 +159,14 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                   )
                 : Column(
                     children: [
-                      const SizedBox(height: 100), // Espaço para a AppBar
+                      SizedBox(height: topSpacing),
 
                       // --- PÓDIO (TOP 3) ---
                       if (_ranking.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: SizedBox(
-                            height: 400, // Altura da área do pódio
+                            height: podiumHeight, // Altura dinâmica calculada
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -169,7 +177,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                     user: _ranking[1],
                                     position: 2,
                                     color: AppColors.neonSilver,
-                                    height: 140,
+                                    height: podiumHeight * 0.26,
                                   ),
                                 
                                 // 1º LUGAR (Centro - Maior)
@@ -177,7 +185,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                   user: _ranking[0],
                                   position: 1,
                                   color: AppColors.neonGold,
-                                  height: 180,
+                                  height: podiumHeight * 0.36,
                                   isFirst: true,
                                 ),
 
@@ -187,14 +195,14 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                                     user: _ranking[2],
                                     position: 3,
                                     color: AppColors.neonBronze,
-                                    height: 110,
+                                    height: podiumHeight * 0.18,
                                   ),
                               ],
                             ),
                           ),
                         ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
 
                       // --- LISTA DO RESTO (4º em diante) ---
                       Expanded(
@@ -378,9 +386,9 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
             children: [
               // Coroa para o 1º lugar
               if (isFirst) 
-                 const Icon(Icons.emoji_events, color: AppColors.neonGold, size: 40),
+                 const Icon(Icons.emoji_events, color: AppColors.neonGold, size: 32),
               
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
 
               // Avatar no topo do pilar
               Builder(
@@ -391,7 +399,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                     style: TextStyle(
                       color: color,
                       fontWeight: FontWeight.bold,
-                      fontSize: isFirst ? 24 : 18,
+                      fontSize: isFirst ? 20 : 16,
                     ),
                   );
 
@@ -402,13 +410,13 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                       boxShadow: [
                         BoxShadow(
                           color: color.withValues(alpha: 0.5), 
-                          blurRadius: (10 * pulseValue).clamp(0.0, double.infinity), // Respiração contínua
+                          blurRadius: (8 * pulseValue).clamp(0.0, double.infinity), // Respiração contínua
                           spreadRadius: (2 * pulseValue).clamp(0.0, double.infinity)
                         )
                       ],
                     ),
                     child: CircleAvatar(
-                      radius: isFirst ? 35 : 25,
+                      radius: isFirst ? 28 : 22,
                       backgroundColor: AppColors.cardDark,
                       backgroundImage: imageProvider,
                       child: imageProvider == null ? fallbackText : null,
@@ -416,22 +424,22 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                   );
                 }
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               
               // Nome do Usuário
               Text(
                 (user['name'] as String).split(" ")[0], // Pega só o primeiro nome
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
               
               // Pontuação
               Text(
                 "${user['total_score']} XP",
-                style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w500),
+                style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.w500),
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
             ],
           ),
         ),

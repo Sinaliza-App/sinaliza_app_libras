@@ -11,36 +11,43 @@ import 'package:sinaliza_app_libras/constants.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:flutter/foundation.dart'; // Para o compute()
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
 import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 import 'package:sinaliza_app_libras/widgets/streak_dialog.dart';
-
-// --- FUNÇÃO ISOLADA (FORA DA CLASSE) PARA NÃO TRAVAR A UI ---
-String _processFrameInIsolate(Uint8List bytes) {
-  return base64Encode(bytes);
-}
+import 'package:sinaliza_app_libras/services/vision_extractor_service.dart';
+import 'package:sinaliza_app_libras/services/libras_inference_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
 
 class ChallengeSequenceScreen extends StatefulWidget {
   final List<Map<String, dynamic>> lessons;
+  final int? moduleId;
 
-  const ChallengeSequenceScreen({super.key, required this.lessons});
+  const ChallengeSequenceScreen({
+    super.key, 
+    required this.lessons,
+    this.moduleId,
+  });
 
   @override
-  State<ChallengeSequenceScreen> createState() => _ChallengeSequenceScreenState();
+  State<ChallengeSequenceScreen> createState() =>
+      _ChallengeSequenceScreenState();
 }
 
 class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
-  // --- CÂMERA E INFERÊNCIA WEBSOCKET ---
+  // --- IA OFFLINE ---
+  final VisionExtractorService _visionExtractor = VisionExtractorService();
+  final LibrasInferenceService _inferenceService = LibrasInferenceService();
+  final List<List<double>> _frameBuffer = [];
+
+  // --- CÂMERA ---
   CameraController? _cameraController;
   bool _isCameraReady = false;
-  bool _isProcessingFrame = false; // Trava para não afogar o servidor
+  bool _isProcessingFrame = false; // Trava para processamento
   DateTime? _lastFrameTime;
-  WebSocketChannel? _channel;
-  bool _isConnected = false;
+  bool _isConnected = false; // Reflete se a IA local está pronta
 
   // --- ESTADO DO JOGO ---
   String _detectedGesture = "Nenhum";
@@ -48,10 +55,12 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
   bool _isCorrect = false;
   String _targetGesture = "";
   bool _isMovement = false; // Flag para UI adaptativa
+  List<dynamic> _lastLandmarks = []; // Matriz de 30x258
 
   // --- TEMPORIZADOR ---
   DateTime? _firstDetectionTime;
-  int _secondsToHold = 3;
+  DateTime? _lastMatchTime;
+  int _secondsToHold = 2;
   int _secondsHeld = 0;
 
   // --- PROGRESSO E EFEITOS ---
@@ -59,6 +68,7 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   // --- DESAFIO SEQUENCIAL ---
+  bool _showIntro = true;
   int _currentIndex = 0;
   int _correctCount = 0;
   bool _isChallengeFinished = false;
@@ -70,64 +80,58 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
   void initState() {
     super.initState();
     _extractTargetGesture();
-    _initializeCamera();
-    _connectWebSocket();
+    _initializeLocalAI();
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 2),
     );
   }
 
-  void _connectWebSocket() {
-    try {
-      _channel = WebSocketChannel.connect(Uri.parse(wsBaseUrl));
-      _isConnected = true;
-      
-      _channel!.stream.listen(
-        (dynamic message) {
-          if (!mounted) return;
-          try {
-            final Map<String, dynamic> data = jsonDecode(message as String) as Map<String, dynamic>;
-            final String gesture = (data['prediction'] as String?) ?? "Nenhum";
-            final double confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
+  void _startChallenge() {
+    setState(() {
+      _showIntro = false;
+    });
+    _initializeCamera();
+  }
 
-            _handleDetectionResult(gesture, confidence);
-          } catch (e) {
-            debugPrint("Erro ao decodificar resposta do WS: $e");
-          } finally {
-            _isProcessingFrame = false;
-          }
-        },
-        onError: (dynamic error) {
-          debugPrint("Erro no WebSocket: $error");
-          _isConnected = false;
-          _isProcessingFrame = false;
-        },
-        onDone: () {
-          debugPrint("WebSocket desconectado");
-          _isConnected = false;
-          _isProcessingFrame = false;
-        },
-      );
+  Future<void> _initializeLocalAI() async {
+    try {
+      if (!_visionExtractor.isInitialized) {
+        await _visionExtractor.initialize();
+      }
+      if (!_inferenceService.isInitialized) {
+        await _inferenceService.initialize();
+      }
+      if (mounted) {
+        setState(() {
+          _isConnected = true; // IA pronta
+        });
+      }
     } catch (e) {
-      debugPrint("Falha ao conectar WebSocket: $e");
-      _isConnected = false;
+      debugPrint("Falha ao inicializar IA Local: $e");
+      if (mounted) {
+        CustomSnackBar.showError(context, "Falha ao iniciar IA offline: $e");
+      }
     }
   }
 
   void _extractTargetGesture() {
     final lesson = widget.lessons[_currentIndex];
-    final title = lesson['title'].toString();
-    if (title.contains("Letra ")) {
-      _targetGesture = title.split("Letra ").last.trim();
+    if (lesson['sign_name'] != null && lesson['sign_name'].toString().trim().isNotEmpty) {
+      _targetGesture = lesson['sign_name'].toString().trim();
     } else {
-      _targetGesture = title.split(":").last.trim();
+      final title = lesson['title'].toString();
+      if (title.contains("Letra ")) {
+        _targetGesture = title.split("Letra ").last.trim();
+      } else {
+        _targetGesture = title.split(":").last.trim();
+      }
     }
-    
+
     // Regra Inteligente: Se for movimento, o usuário ganha instantaneamente (0s).
-    // Se for estático (Alfabeto), ele precisa segurar a pose (3s).
+    // Se for estático (Alfabeto), ele precisa segurar a pose (2s).
     final lessonType = (lesson['type'] ?? 'estatico').toString().toLowerCase();
     _isMovement = lessonType == 'movimento' || lessonType == 'dynamic';
-    _secondsToHold = _isMovement ? 0 : 3;
+    _secondsToHold = _isMovement ? 0 : 2;
     _challengeTimeLeft = 10;
     _isCorrect = false;
     _firstDetectionTime = null;
@@ -141,7 +145,6 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     _challengeTimer?.cancel();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
-    _channel?.sink.close();
     _confettiController.dispose();
     super.dispose();
   }
@@ -192,19 +195,22 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     setState(() {
       _isTransitioning = true;
     });
-    
+
     if (await Vibration.hasVibrator()) {
       Vibration.vibrate(pattern: [0, 500, 200, 500]);
     }
-    
+
     // Registra erro silenciosamente no banco
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId != null) {
-        await Supabase.instance.client.rpc<void>('increment_quiz_error', params: {
-          'p_user_id': userId,
-          'p_sign_id': widget.lessons[_currentIndex]['id']
-        });
+        await Supabase.instance.client.rpc<void>(
+          'increment_quiz_error',
+          params: {
+            'p_user_id': userId,
+            'p_sign_id': widget.lessons[_currentIndex]['id'],
+          },
+        );
       }
     } catch (e) {
       debugPrint("Erro ao registrar falha no desafio: $e");
@@ -213,7 +219,7 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     if (!mounted) return;
     CustomSnackBar.showError(context, "Tempo Esgotado!");
     await Future<void>.delayed(const Duration(seconds: 2));
-    
+
     _nextChallenge();
   }
 
@@ -222,6 +228,7 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     setState(() {
       if (_currentIndex < widget.lessons.length - 1) {
         _currentIndex++;
+        _frameBuffer.clear(); // Limpa buffer da lição anterior
         _extractTargetGesture();
         _isTransitioning = false;
       } else {
@@ -232,76 +239,204 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     });
   }
 
- // --- NOVA LÓGICA WEBSOCKET COM ISOLATE ---
- void _startVisionStream() {
-    _cameraController!.startImageStream((CameraImage image) async {
-      if (!_isConnected || _isProcessingFrame || _isCorrect || _isTransitioning || _isChallengeFinished) return;
+  Future<void> _reportError() async {
+    if (_lastLandmarks.isEmpty || _lastLandmarks.length != 30) {
+      CustomSnackBar.showError(
+        context,
+        "Nenhum dado capturado ainda. Aguarde.",
+      );
+      return;
+    }
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final payload = {
+        "user_id": userId,
+        "sign_name": _targetGesture,
+        "source": "mobile_feedback",
+        "reporter_role": "student",
+        "raw_landmarks": _lastLandmarks,
+      };
 
-      final now = DateTime.now();
-      // Otimizamos para até 10 frames por segundo de processamento para maior fluidez
-      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 100) {
+      final response = await ApiService.post(
+        '$apiBaseUrl/coleta/amostra',
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (userId != null) {
+          final res = await Supabase.instance.client
+              .from('profiles')
+              .select('total_score')
+              .eq('id', userId)
+              .single();
+          final currentScore = res['total_score'] as int? ?? 0;
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'total_score': currentScore + 10})
+              .eq('id', userId);
+        }
+        if (mounted) {
+          Provider.of<UserProvider>(context, listen: false).addScore(10);
+          CustomSnackBar.showSuccess(
+            context,
+            "Amostra enviada para revisão do professor! +10 XP",
+          );
+        }
+      } else {
+        if (mounted) {
+          CustomSnackBar.showError(
+            context,
+            "Erro ao enviar amostra: ${response.statusCode}",
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.showError(
+          context,
+          "Erro de rede ao reportar incorreção.",
+        );
+      }
+    }
+  }
+
+  // --- NOVA LÓGICA 100% OFFLINE (SEM TRAVAMENTO DE PREVIEW) ---
+  void _startVisionStream() {
+    _cameraController!.startImageStream((CameraImage image) {
+      if (!_isConnected ||
+          _isProcessingFrame ||
+          _isCorrect ||
+          _isTransitioning ||
+          _isChallengeFinished) {
         return;
       }
-      
-      _lastFrameTime = now;
-      _isProcessingFrame = true; // Trava o envio até a resposta voltar
 
-      try {
-        final plane = image.planes[0];
-        
-        // --- O SEGREDO DO FPS ALTO ---
-        // Usamos o compute() para jogar a conversão pesada Base64 para outra Thread!
-        final String imageBase64 = await compute(_processFrameInIsolate, plane.bytes);
-
-        // Dispara direto no Socket (muito mais rápido que HTTP)
-        _channel!.sink.add(jsonEncode({
-          'image': imageBase64,
-          'width': image.width,
-          'height': image.height,
-          'stride': plane.bytesPerRow,
-          'model_type': (widget.lessons[_currentIndex]['type'] ?? 'estatico').toString().toLowerCase() == 'movimento' ? 'movimento' : 'alfabeto'
-        }));
-      } catch (e) {
-        debugPrint("Erro no processamento do frame: $e");
-        _isProcessingFrame = false;
+      final now = DateTime.now();
+      // Throttle: 60ms para dinâmico (~16 FPS) e 100ms para estático (~10 FPS)
+      final int throttleMs = _isMovement ? 60 : 100;
+      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < throttleMs) {
+        return;
       }
+
+      _lastFrameTime = now;
+      _isProcessingFrame = true;
+
+      _processFrameAsync(image);
     });
   }
 
+  Future<void> _processFrameAsync(CameraImage image) async {
+    try {
+      // 1. Extrai o frame
+      final int sensorOrientation = _cameraController!.description.sensorOrientation;
+      final lensDirection = _cameraController!.description.lensDirection;
+      final features = await _visionExtractor.processImage(
+        image, 
+        sensorOrientation,
+        isMovement: _isMovement,
+        lensDirection: lensDirection,
+      );
+
+      // Noise gate: se as features estão zeradas, nenhuma mão foi detectada
+      if (features.every((v) => v == 0.0)) {
+        final now = DateTime.now();
+        if (_lastMatchTime == null || now.difference(_lastMatchTime!).inMilliseconds > 450) {
+          if (_detectedGesture != "Nenhum") {
+            _handleDetectionResult("Nenhum", 0.0);
+          }
+        }
+        return;
+      }
+
+      if (mounted) {
+        // 2. Alimenta buffer
+        _frameBuffer.add(features);
+        if (_frameBuffer.length > 30) {
+          _frameBuffer.removeAt(0);
+        }
+
+        _lastLandmarks = List.from(_frameBuffer);
+
+        // 3. Inferência local no ONNX
+        if (!_isMovement) {
+          // Alfabeto (MLP): Usa apenas o frame atual
+          final result = await _inferenceService.predictAlphabet(features);
+          debugPrint("📝 Challenge Alfabeto: $result");
+          
+          final String gesture = (result['prediction'] as String?) ?? "Nenhum";
+          final double confidence = (result['confidence'] as num?)?.toDouble() ?? 0.0;
+          
+          _handleDetectionResult(gesture, confidence);
+        } else {
+          // Gestos (LSTM): Requer o buffer completo de 30 frames
+          if (_frameBuffer.length == 30) {
+            final result = await _inferenceService.predict(_frameBuffer);
+            debugPrint("🏃‍♂️ Challenge Movimento: $result");
+            
+            final String gesture = (result['prediction'] as String?) ?? "Nenhum";
+            final double confidence = (result['confidence'] as num?)?.toDouble() ?? 0.0;
+            
+            _handleDetectionResult(gesture, confidence);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro no processamento local do frame: $e");
+    } finally {
+      final int coolDownMs = _isMovement ? 20 : 60;
+      await Future<void>.delayed(Duration(milliseconds: coolDownMs));
+      if (mounted) _isProcessingFrame = false;
+    }
+  }
+
   String _normalizeGesture(String gesture) {
-    // Troca espaços, barras, hifens por underline e converte pra minúsculo (Padrão do Modelo Python)
-    return gesture.toLowerCase()
-        .replaceAll(RegExp(r'[áàâã]'), 'a')
-        .replaceAll(RegExp(r'[éèê]'), 'e')
-        .replaceAll(RegExp(r'[íìî]'), 'i')
-        .replaceAll(RegExp(r'[óòôõ]'), 'o')
-        .replaceAll(RegExp(r'[úùû]'), 'u')
-        .replaceAll(RegExp(r'[ç]'), 'c')
+    String g = gesture.toLowerCase().trim();
+    // Normalização específica para Ç / C_CEDILHA
+    g = g.replaceAll('c_cedilha', 'c_cedilha')
+         .replaceAll('c-cedilha', 'c_cedilha')
+         .replaceAll('c cedilha', 'c_cedilha')
+         .replaceAll('ç', 'c_cedilha');
+
+    // Remove pontuações (ex: "Tudo bem?" -> "tudo bem")
+    g = g.replaceAll(RegExp(r'[?!.,;:()\[\]{}]'), '');
+
+    return g
+        .replaceAll(RegExp(r'[áàâãä]'), 'a')
+        .replaceAll(RegExp(r'[éèêë]'), 'e')
+        .replaceAll(RegExp(r'[íìîï]'), 'i')
+        .replaceAll(RegExp(r'[óòôõö]'), 'o')
+        .replaceAll(RegExp(r'[úùûü]'), 'u')
         .replaceAll(RegExp(r'[\s/|-]+'), '_')
         .trim();
   }
 
   // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
- void _handleDetectionResult(String gesture, double confidence) async {
+  void _handleDetectionResult(String gesture, double confidence) async {
     if (_isTransitioning || _isChallengeFinished) return;
-    // Para movimentos confiamos 100% no backend (já que ele filtra a confianca), para estáticos > 0.6
     final String normalizedDetected = _normalizeGesture(gesture);
     final String normalizedTarget = _normalizeGesture(_targetGesture);
 
-    final bool isCurrentlyMatching = ((_isMovement || confidence > 0.6) && 
-                                normalizedDetected == normalizedTarget && 
-                                normalizedDetected != "nenhum");
+    debugPrint("🎯 Challenge Validando: '$normalizedDetected' vs '$normalizedTarget' (Confiança: $confidence)");
 
+    final double minConfidence = _isMovement ? 0.45 : 0.50;
+    final bool isCurrentlyMatching = (confidence >= minConfidence &&
+        normalizedDetected == normalizedTarget &&
+        normalizedDetected != "nenhum");
+
+    final now = DateTime.now();
     if (isCurrentlyMatching) {
+      _lastMatchTime = now;
       if (!_isCorrect) {
         if (_firstDetectionTime == null) {
-          _firstDetectionTime = DateTime.now();
+          _firstDetectionTime = now;
           _secondsHeld = 0;
         } else {
-          _secondsHeld = DateTime.now().difference(_firstDetectionTime!).inSeconds;
+          _secondsHeld = DateTime.now()
+              .difference(_firstDetectionTime!)
+              .inSeconds;
         }
 
-        // Se bateu a meta (ex: 3 segundos ou instantâneo)
+        // Se bateu a meta (ex: 2 segundos ou instantâneo)
         if (_secondsHeld >= _secondsToHold) {
           _isCorrect = true;
           _onSuccess();
@@ -309,16 +444,23 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
       }
     } else {
       if (!_isCorrect) {
-        // IA piscou ou o usuário mexeu a mão: Zera o cronômetro!
-        _firstDetectionTime = null;
-        _secondsHeld = 0;
+        // Tolerância de 450ms antes de zerar o progresso
+        // Evita que 1 frame com ruído ou piscar de câmera zere o usuário!
+        if (_lastMatchTime == null || now.difference(_lastMatchTime!).inMilliseconds > 450) {
+          _firstDetectionTime = null;
+          _secondsHeld = 0;
+        }
       }
     }
 
     // Atualiza a tela com o que a IA está enxergando agora
     setState(() {
-      _detectedGesture = gesture;
       _detectedConfidence = confidence;
+      if (confidence >= (_isMovement ? 0.40 : 0.45)) {
+        _detectedGesture = gesture;
+      } else {
+        _detectedGesture = "Aguardando...";
+      }
     });
   }
 
@@ -343,53 +485,22 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     } catch (e) {
       debugPrint("Erro ao tocar som: $e");
     }
-    
+
     await Future<void>.delayed(const Duration(seconds: 2));
     _nextChallenge();
   }
 
-  // --- NOVA FUNÇÃO: REPORTAR (DENÚNCIA) ---
-  Future<String?> _showReportDialog(BuildContext context) async {
-    final TextEditingController descCtrl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardDark,
-        title: const Text("Reportar Problema", style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: descCtrl,
-          maxLines: 3,
-          style: const TextStyle(color: Colors.white),
-          cursorColor: AppColors.neonRed,
-          decoration: const InputDecoration(
-            hintText: "O que há de errado nesta lição?",
-            hintStyle: TextStyle(color: Colors.grey),
-            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.neonRed)),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, descCtrl.text),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonRed, foregroundColor: Colors.white),
-            child: const Text("ENVIAR"),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Future<void> _saveProgress() async {
     final int totalXp = _correctCount * 20;
-    
+
     if (!mounted) return;
-    
+
     // Calcula o percentual e define a identidade visual do resultado
-    final double percentage = widget.lessons.isEmpty ? 0 : _correctCount / widget.lessons.length;
+    final double percentage = widget.lessons.isEmpty
+        ? 0
+        : _correctCount / widget.lessons.length;
     final String emoji;
     final String title;
     final Color accentColor;
@@ -404,19 +515,27 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
       emoji = '🔥';
       title = 'MUITO BOM!';
       accentColor = AppColors.neonGreen;
-      confettiColors = const [AppColors.neonGreen, AppColors.neonBlue, AppColors.neonOrange];
+      confettiColors = const [
+        AppColors.neonGreen,
+        AppColors.neonBlue,
+        AppColors.neonOrange,
+      ];
     } else if (percentage >= 0.3) {
       emoji = '💪';
       title = 'CONTINUE PRATICANDO!';
       accentColor = AppColors.neonOrange;
-      confettiColors = const [AppColors.neonOrange, AppColors.neonRed, Colors.white];
+      confettiColors = const [
+        AppColors.neonOrange,
+        AppColors.neonRed,
+        Colors.white,
+      ];
     } else {
       emoji = '📚';
       title = 'ESTUDE MAIS!';
       accentColor = AppColors.neonRed;
       confettiColors = const [AppColors.neonRed, Colors.white, Colors.grey];
     }
-    
+
     // Mostra tela de fim de jogo com estilo moderno
     showGeneralDialog(
       context: context,
@@ -424,8 +543,10 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
       barrierColor: AppColors.darkBG.withValues(alpha: 0.95),
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (context, anim1, anim2) {
-        final confettiController = ConfettiController(duration: const Duration(seconds: 3))..play();
-        
+        final confettiController = ConfettiController(
+          duration: const Duration(seconds: 3),
+        )..play();
+
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: Stack(
@@ -468,7 +589,10 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.cardDark,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: accentColor.withValues(alpha: 0.5), width: 1.5),
+                          border: Border.all(
+                            color: accentColor.withValues(alpha: 0.5),
+                            width: 1.5,
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: accentColor.withValues(alpha: 0.1),
@@ -481,7 +605,10 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                           children: [
                             const Text(
                               'Sua Pontuação',
-                              style: TextStyle(color: Colors.white70, fontSize: 16),
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -496,7 +623,11 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.flash_on_rounded, color: AppColors.neonOrange, size: 28),
+                                const Icon(
+                                  Icons.flash_on_rounded,
+                                  color: AppColors.neonOrange,
+                                  size: 28,
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   '+$totalXp XP',
@@ -526,11 +657,16 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                             foregroundColor: Colors.black,
                             elevation: 8,
                             shadowColor: accentColor.withValues(alpha: 0.5),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
                           ),
                           child: const Text(
                             'VOLTAR AO MENU',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ),
@@ -546,35 +682,79 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
 
     if (totalXp == 0) return; // Nao salva no banco se não acertou nada
 
-    final String apiUrl = '$apiBaseUrl/progress';
-    try {
-      // Nota: Podemos estar salvando no progresso da última lição, ou idealmente ter uma tabela separada.
-      // Aqui salvaremos em nome da última lição só para creditar o XP.
-      final response = await ApiService.post(
-            apiUrl,
-            body: json.encode({'lesson_id': widget.lessons.last['id'], 'score': totalXp}),
-          )
-          .timeout(const Duration(seconds: 10));
+    final userId = Supabase.instance.client.auth.currentUser?.id;
 
-      if (!mounted) return;
-      final responseData = json.decode(response.body);
-      final currentStreak = Provider.of<UserProvider>(context, listen: false).user?.streakCount ?? 0;
-
-      if (responseData['streak_count'] != null) {
-        final int newStreak = responseData['streak_count'] as int;
-        Provider.of<UserProvider>(context, listen: false).updateStreak(newStreak);
-        
-        if (newStreak > currentStreak) {
-          await StreakDialog.show(context, newStreak);
-        }
+    // 1. Salva localmente que o Boss do módulo foi concluído com sucesso
+    if (userId != null && widget.moduleId != null) {
+      try {
+        const storage = FlutterSecureStorage();
+        await storage.write(key: 'boss_completed_${widget.moduleId}_$userId', value: 'true');
+      } catch (e) {
+        debugPrint("Aviso ao salvar status de conclusão do boss: $e");
       }
+    }
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        if (!mounted) return;
-        Provider.of<UserProvider>(context, listen: false).addScore(totalXp);
+    // 2. Atualiza pontuação e streak no Backend PostgreSQL (conta para Ranking e Perfil)
+    final int currentStreak = mounted 
+        ? (Provider.of<UserProvider>(context, listen: false).user?.streakCount ?? 0) 
+        : 0;
+
+    try {
+      final challengeRes = await ApiService.post(
+        '$apiBaseUrl/challenge/progress',
+        body: json.encode({
+          'module_id': widget.moduleId,
+          'score': totalXp,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (mounted && (challengeRes.statusCode == 200 || challengeRes.statusCode == 201)) {
+        final responseData = json.decode(challengeRes.body);
+
+        if (responseData['streak_count'] != null) {
+          final int newStreak = responseData['streak_count'] as int;
+          Provider.of<UserProvider>(context, listen: false).updateStreak(newStreak);
+          if (newStreak > currentStreak) {
+            await StreakDialog.show(context, newStreak);
+          }
+        }
+      } else {
+        // Fallback para rota /progress convencional se o backend antigo responder
+        await ApiService.post(
+          '$apiBaseUrl/progress',
+          body: json.encode({
+            'lesson_id': widget.lessons.last['id'],
+            'score': totalXp,
+          }),
+        ).timeout(const Duration(seconds: 8));
       }
     } catch (e) {
-      debugPrint("Erro ao salvar progresso do desafio: $e");
+      debugPrint("Aviso ao registrar desafio no backend: $e");
+    }
+
+    // 3. Atualiza pontuação direta no Supabase (profiles.total_score)
+    if (userId != null) {
+      try {
+        final res = await Supabase.instance.client
+            .from('profiles')
+            .select('total_score')
+            .eq('id', userId)
+            .maybeSingle();
+        if (res != null) {
+          final currentScore = (res['total_score'] as num?)?.toInt() ?? 0;
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'total_score': currentScore + totalXp})
+              .eq('id', userId);
+        }
+      } catch (e) {
+        debugPrint("Aviso ao atualizar profile no Supabase: $e");
+      }
+    }
+
+    // 4. Atualiza estado em memória no Provider imediatamente
+    if (mounted) {
+      Provider.of<UserProvider>(context, listen: false).addScore(totalXp);
     }
   }
 
@@ -586,15 +766,21 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showIntro) {
+      return _buildIntroScreen();
+    }
+
     if (_isChallengeFinished) {
       return const Scaffold(
         backgroundColor: AppColors.darkBG,
-        body: Center(child: CircularProgressIndicator(color: AppColors.neonGreen)),
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.neonGreen),
+        ),
       );
     }
 
-    final lesson = widget.lessons[_currentIndex];
-    final String lessonTitle = "Sinal ${_currentIndex + 1} de ${widget.lessons.length}";
+    final String lessonTitle =
+        "Sinal ${_currentIndex + 1} de ${widget.lessons.length}";
     final Color statusColor = _getStatusColor();
 
     return Scaffold(
@@ -640,33 +826,12 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.flag_outlined, color: AppColors.neonRed),
-                            tooltip: 'Reportar problema',
-                            onPressed: () async {
-                              final desc = await _showReportDialog(context);
-                              if (desc != null && desc.trim().isNotEmpty) {
-                                try {
-                                  final userId = Supabase.instance.client.auth.currentUser?.id;
-                                  if (userId != null) {
-                                    await Supabase.instance.client.rpc<void>('increment_quiz_error', params: {
-                                      'p_user_id': userId,
-                                      'p_sign_id': lesson['id'],
-                                    });
-                                  }
-                                  await Supabase.instance.client.from('reports').insert({
-                                    'user_id': userId,
-                                    'target_type': 'lesson',
-                                    'target_id': lesson['id'],
-                                    'description': desc,
-                                  });
-                                  if (!context.mounted) return;
-                                  CustomSnackBar.showSuccess(context, 'Report enviado aos administradores!');
-                                } catch (e) {
-                                  if (!context.mounted) return;
-                                  CustomSnackBar.showError(context, 'Erro ao enviar report.');
-                                }
-                              }
-                            },
+                            icon: const Icon(
+                              Icons.flag_outlined,
+                              color: AppColors.neonRed,
+                            ),
+                            tooltip: 'Reportar problema na IA',
+                            onPressed: _reportError,
                           ),
                         ],
                       ),
@@ -677,21 +842,38 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                       children: [
                         if (!_isCorrect && !_isTransitioning) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
-                              color: _challengeTimeLeft <= 3 ? AppColors.neonRed.withValues(alpha: 0.2) : AppColors.neonOrange.withValues(alpha: 0.1),
+                              color: _challengeTimeLeft <= 3
+                                  ? AppColors.neonRed.withValues(alpha: 0.2)
+                                  : AppColors.neonOrange.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(30),
-                              border: Border.all(color: _challengeTimeLeft <= 3 ? AppColors.neonRed : AppColors.neonOrange),
+                              border: Border.all(
+                                color: _challengeTimeLeft <= 3
+                                    ? AppColors.neonRed
+                                    : AppColors.neonOrange,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.timer_outlined, color: _challengeTimeLeft <= 3 ? AppColors.neonRed : AppColors.neonOrange, size: 24),
+                                Icon(
+                                  Icons.timer_outlined,
+                                  color: _challengeTimeLeft <= 3
+                                      ? AppColors.neonRed
+                                      : AppColors.neonOrange,
+                                  size: 24,
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   "00:${_challengeTimeLeft.toString().padLeft(2, '0')}",
                                   style: TextStyle(
-                                    color: _challengeTimeLeft <= 3 ? AppColors.neonRed : AppColors.neonOrange,
+                                    color: _challengeTimeLeft <= 3
+                                        ? AppColors.neonRed
+                                        : AppColors.neonOrange,
                                     fontSize: 28,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -702,7 +884,9 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                           const SizedBox(height: 16),
                         ],
                         Text(
-                          _secondsToHold == 0 ? "Faça o movimento para:" : "Faça o sinal para:",
+                          _secondsToHold == 0
+                              ? "Faça o movimento para:"
+                              : "Faça o sinal para:",
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 14,
@@ -715,7 +899,12 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                             fontSize: 42,
                             fontWeight: FontWeight.w900,
                             shadows: [
-                              Shadow(color: AppColors.neonOrange.withValues(alpha: 0.6), blurRadius: 15),
+                              Shadow(
+                                color: AppColors.neonOrange.withValues(
+                                  alpha: 0.6,
+                                ),
+                                blurRadius: 15,
+                              ),
                             ],
                           ),
                         ),
@@ -732,11 +921,15 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: statusColor,
-                            width: _isCorrect || _firstDetectionTime != null ? 4 : 2,
+                            width: _isCorrect || _firstDetectionTime != null
+                                ? 4
+                                : 2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: statusColor.withValues(alpha: _isCorrect ? 0.5 : 0.2),
+                              color: statusColor.withValues(
+                                alpha: _isCorrect ? 0.5 : 0.2,
+                              ),
                               blurRadius: 20,
                               spreadRadius: 2,
                             ),
@@ -744,26 +937,72 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(20),
-                          child: _isCameraReady
-                              ? LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    return SizedBox(
-                                      width: constraints.maxWidth,
-                                      height: constraints.maxHeight,
-                                      child: FittedBox(
-                                        fit: BoxFit.cover,
-                                        child: SizedBox(
-                                          width: _cameraController!.value.previewSize!.height,
-                                          height: _cameraController!.value.previewSize!.width,
-                                          child: CameraPreview(_cameraController!),
-                                        ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              _isCameraReady
+                                  ? LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        return SizedBox(
+                                          width: constraints.maxWidth,
+                                          height: constraints.maxHeight,
+                                          child: FittedBox(
+                                            fit: BoxFit.cover,
+                                            child: SizedBox(
+                                              width: _cameraController!
+                                                  .value
+                                                  .previewSize!
+                                                  .height,
+                                              height: _cameraController!
+                                                  .value
+                                                  .previewSize!
+                                                  .width,
+                                              child: CameraPreview(
+                                                _cameraController!,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.neonGreen,
                                       ),
-                                    );
-                                  },
-                                )
-                              : const Center(
-                                  child: CircularProgressIndicator(color: AppColors.neonGreen),
+                                    ),
+                              if (!_isConnected)
+                                Container(
+                                  color: Colors.black.withValues(alpha: 0.75),
+                                  child: const Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        CircularProgressIndicator(
+                                          color: AppColors.neonGreen,
+                                        ),
+                                        SizedBox(height: 16),
+                                        Text(
+                                          "Carregando Inteligência Artificial...",
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          "Preparando modelos neurais offline",
+                                          style: TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -771,16 +1010,25 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                     // Feedback (Contador)
                     Container(
                       margin: const EdgeInsets.only(top: 20),
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 20,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.cardDark,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05),
+                        ),
                       ),
                       child: Column(
                         children: [
                           if (_isCorrect) ...[
-                            const Icon(Icons.stars, color: AppColors.neonGreen, size: 60),
+                            const Icon(
+                              Icons.stars,
+                              color: AppColors.neonGreen,
+                              size: 60,
+                            ),
                             const SizedBox(height: 8),
                             const Text(
                               "PARABÉNS!",
@@ -792,9 +1040,13 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                             ),
                           ] else if (_firstDetectionTime != null) ...[
                             Text(
-                              _isMovement ? "ANALISANDO MOVIMENTO" : "MANTENHA O SINAL",
+                              _isMovement
+                                  ? "ANALISANDO MOVIMENTO"
+                                  : "MANTENHA O SINAL",
                               style: TextStyle(
-                                color: AppColors.neonOrange.withValues(alpha: 0.8),
+                                color: AppColors.neonOrange.withValues(
+                                  alpha: 0.8,
+                                ),
                                 fontSize: _isMovement ? 14 : 12,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.2,
@@ -819,7 +1071,9 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                                   Text(
                                     "/ $_secondsToHold s",
                                     style: TextStyle(
-                                      color: AppColors.neonOrange.withValues(alpha: 0.8),
+                                      color: AppColors.neonOrange.withValues(
+                                        alpha: 0.8,
+                                      ),
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       height: 1.5,
@@ -830,16 +1084,21 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                             ] else ...[
                               const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 8.0),
-                                child: CircularProgressIndicator(color: AppColors.neonOrange),
+                                child: CircularProgressIndicator(
+                                  color: AppColors.neonOrange,
+                                ),
                               ),
                             ],
                             const SizedBox(height: 12),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
-                                value: (_secondsHeld + 1) / (_secondsToHold == 0 ? 1 : _secondsToHold),
+                                value:
+                                    (_secondsHeld + 1) /
+                                    (_secondsToHold == 0 ? 1 : _secondsToHold),
                                 minHeight: 8,
-                                backgroundColor: AppColors.neonOrange.withValues(alpha: 0.2),
+                                backgroundColor: AppColors.neonOrange
+                                    .withValues(alpha: 0.2),
                                 color: AppColors.neonOrange,
                               ),
                             ),
@@ -865,7 +1124,9 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
                                   value: _detectedConfidence,
                                   minHeight: 8,
                                   backgroundColor: Colors.grey[800],
-                                  color: _detectedConfidence > 0.6 ? AppColors.neonGreen : AppColors.neonOrange,
+                                  color: _detectedConfidence > 0.6
+                                      ? AppColors.neonGreen
+                                      : AppColors.neonOrange,
                                 ),
                               ),
                             ] else ...[
@@ -912,6 +1173,202 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildIntroScreen() {
+    return Scaffold(
+      backgroundColor: AppColors.darkBG,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          "DESAFIO PRÁTICO",
+          style: TextStyle(
+            color: AppColors.neonOrange,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.darkBG, AppColors.darkBG2],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+              child: FadeInSlide(
+                duration: const Duration(milliseconds: 600),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Ícone em destaque
+                    Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        color: AppColors.neonOrange.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.neonOrange.withValues(alpha: 0.5),
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.videocam_rounded,
+                        color: AppColors.neonOrange,
+                        size: 48,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'PREPARE-SE!',
+                      style: TextStyle(
+                        color: AppColors.neonOrange,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Mostre seus sinais em Libras para a câmera e teste seus reflexos em tempo real!',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Card de Regras
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardDark,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          _ruleRow(
+                            Icons.front_hand_rounded,
+                            AppColors.neonBlue,
+                            'Posicione a mão visível na câmera',
+                          ),
+                          const SizedBox(height: 16),
+                          _ruleRow(
+                            Icons.timer_rounded,
+                            AppColors.neonOrange,
+                            '$_challengeTimeLeft segundos por sinal sorteado',
+                          ),
+                          const SizedBox(height: 16),
+                          _ruleRow(
+                            Icons.check_circle_outline_rounded,
+                            AppColors.neonGreen,
+                            'Sustente o sinal por $_secondsToHold segundos',
+                          ),
+                          const SizedBox(height: 16),
+                          _ruleRow(
+                            Icons.star_rounded,
+                            AppColors.neonGold,
+                            '${widget.lessons.length} sinais sorteados nesta rodada',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+
+                    // Botão Começar Desafio
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: _startChallenge,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.neonOrange,
+                          foregroundColor: Colors.black,
+                          elevation: 8,
+                          shadowColor: AppColors.neonOrange.withValues(alpha: 0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.play_arrow_rounded, size: 28),
+                            SizedBox(width: 8),
+                            Text(
+                              'Começar Desafio',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _ruleRow(IconData icon, Color color, String text) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

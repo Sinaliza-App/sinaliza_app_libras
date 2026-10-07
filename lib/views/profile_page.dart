@@ -508,9 +508,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             // --- ADMIN BADGE ---
                             if (user != null) _buildAdminBadge(user.isAdmin),
 
-                            const SizedBox(height: 30),
-
-                            const SizedBox(height: 30),
+                            const SizedBox(height: 24),
 
                             // --- SEÇÃO: ESTATÍSTICAS ---
                             const Align(

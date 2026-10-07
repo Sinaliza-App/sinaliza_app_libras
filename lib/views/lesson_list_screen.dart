@@ -14,10 +14,20 @@ import 'package:sinaliza_app_libras/providers/user_provider.dart';
 import 'package:sinaliza_app_libras/views/challenge_sequence_screen.dart';
 import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
 
+import 'dart:math';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 class CombinedLessonData {
   final List<Map<String, dynamic>> lessons;
   final Set<int> completedLessonIds;
-  CombinedLessonData({required this.lessons, required this.completedLessonIds});
+  final bool isBossCompleted;
+
+  CombinedLessonData({
+    required this.lessons, 
+    required this.completedLessonIds,
+    this.isBossCompleted = false,
+  });
 }
 
 class LessonListScreen extends StatefulWidget {
@@ -76,9 +86,20 @@ class _LessonListScreenState extends State<LessonListScreen> {
           .map<int>((dynamic p) => p['lesson_id'] as int)
           .toSet();
 
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      bool isBossCompleted = false;
+      if (userId != null && widget.moduleId != null) {
+        try {
+          const storage = FlutterSecureStorage();
+          final val = await storage.read(key: 'boss_completed_${widget.moduleId}_$userId');
+          isBossCompleted = val == 'true';
+        } catch (_) {}
+      }
+
       return CombinedLessonData(
         lessons: lessons,
         completedLessonIds: completedIds,
+        isBossCompleted: isBossCompleted,
       );
     } catch (e) {
       throw Exception('Erro de conexão: $e');
@@ -314,6 +335,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
                         if (index == lessons.length) {
                           // CARD DO DESAFIO FINAL (BOSS)
                           final bool isBossUnlocked = lessons.where((l) => l["is_draft"] != true).every((l) => completed.contains(l["id"]));
+                          final bool isBossCompleted = snapshot.data?.isBossCompleted ?? false;
                           
                           return FadeInSlide(
                             duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
@@ -322,11 +344,21 @@ class _LessonListScreenState extends State<LessonListScreen> {
                               onTap: () async {
                                 HapticFeedback.lightImpact();
                                 if (isBossUnlocked) {
-                                  // Abre o Desafio Sequencial com as lições deste módulo
+                                  // Lições deste módulo específico
+                                  final validLessons = lessons.where((l) => l["is_draft"] != true).toList();
+                                  // Embaralha as lições para garantir ordem aleatória no módulo específico
+                                  final shuffled = List<Map<String, dynamic>>.from(validLessons)..shuffle(Random());
+                                  // Se tiver muitas lições (ex: 26 letras), toma até 8 aleatórias para desafio dinâmico
+                                  final challengeLessons = shuffled.length > 8 ? shuffled.take(8).toList() : shuffled;
+
+                                  // Abre o Desafio Sequencial aleatório
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute<dynamic>(
-                                      builder: (context) => ChallengeSequenceScreen(lessons: lessons.where((l) => l["is_draft"] != true).toList()),
+                                      builder: (context) => ChallengeSequenceScreen(
+                                        lessons: challengeLessons,
+                                        moduleId: widget.moduleId,
+                                      ),
                                     ),
                                   );
                                   if (mounted) _refreshData();
@@ -338,16 +370,32 @@ class _LessonListScreenState extends State<LessonListScreen> {
                                 margin: const EdgeInsets.only(top: 20, bottom: 40),
                                 padding: const EdgeInsets.all(24),
                                 decoration: BoxDecoration(
-                                  gradient: isBossUnlocked
-                                      ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange])
-                                      : LinearGradient(colors: [Colors.grey[800]!, Colors.grey[900]!]),
+                                  gradient: isBossCompleted
+                                      ? const LinearGradient(
+                                          colors: [Color(0xFF047857), Color(0xFF0D9488), Color(0xFF10B981)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : isBossUnlocked
+                                          ? const LinearGradient(colors: [Colors.orange, Colors.deepOrange])
+                                          : LinearGradient(colors: [Colors.grey[800]!, Colors.grey[900]!]),
                                   borderRadius: BorderRadius.circular(24),
                                   border: Border.all(
-                                    color: isBossUnlocked ? Colors.yellow : Colors.grey[700]!,
-                                    width: 2,
+                                    color: isBossCompleted
+                                        ? Colors.amberAccent
+                                        : isBossUnlocked
+                                            ? Colors.yellow
+                                            : Colors.grey[700]!,
+                                    width: isBossCompleted ? 2.5 : 2,
                                   ),
                                   boxShadow: [
-                                    if (isBossUnlocked)
+                                    if (isBossCompleted)
+                                      BoxShadow(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                                        blurRadius: 25,
+                                        spreadRadius: 4,
+                                      )
+                                    else if (isBossUnlocked)
                                       BoxShadow(
                                         color: Colors.orange.withValues(alpha: 0.4),
                                         blurRadius: 20,
@@ -355,39 +403,80 @@ class _LessonListScreenState extends State<LessonListScreen> {
                                       ),
                                   ],
                                 ),
-                                child: Row(
+                                child: Stack(
                                   children: [
-                                    Icon(
-                                      isBossUnlocked ? Icons.local_fire_department_rounded : Icons.lock_rounded,
-                                      color: isBossUnlocked ? Colors.yellow : Colors.grey[500],
-                                      size: 40,
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isBossCompleted
+                                              ? Icons.emoji_events_rounded
+                                              : isBossUnlocked
+                                                  ? Icons.local_fire_department_rounded
+                                                  : Icons.lock_rounded,
+                                          color: isBossCompleted
+                                              ? Colors.amberAccent
+                                              : isBossUnlocked
+                                                  ? Colors.yellow
+                                                  : Colors.grey[500],
+                                          size: 42,
+                                        ),
+                                        const SizedBox(width: 20),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                isBossCompleted
+                                                    ? "Módulo Dominado! 🏆"
+                                                    : "Desafio Final",
+                                                style: TextStyle(
+                                                  color: (isBossCompleted || isBossUnlocked)
+                                                      ? Colors.white
+                                                      : Colors.grey[400],
+                                                  fontSize: 22,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                isBossCompleted
+                                                    ? "Desafio concluído! Toque para treinar novamente."
+                                                    : isBossUnlocked
+                                                        ? "Prove que domina o módulo!"
+                                                        : "Bloqueado",
+                                                style: TextStyle(
+                                                  color: (isBossCompleted || isBossUnlocked)
+                                                      ? Colors.white.withValues(alpha: 0.9)
+                                                      : Colors.grey[500],
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 20),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            "Desafio Final",
+                                    if (isBossCompleted)
+                                      Positioned(
+                                        top: 0,
+                                        right: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amberAccent,
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: const Text(
+                                            "DOMINADO ✓",
                                             style: TextStyle(
-                                              color: isBossUnlocked ? Colors.white : Colors.grey[400],
-                                              fontSize: 22,
+                                              color: Colors.black,
+                                              fontSize: 10,
                                               fontWeight: FontWeight.w900,
+                                              letterSpacing: 0.8,
                                             ),
                                           ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            isBossUnlocked 
-                                                ? "Prove que domina o módulo!" 
-                                                : "Bloqueado",
-                                            style: TextStyle(
-                                              color: isBossUnlocked ? Colors.white.withValues(alpha: 0.9) : Colors.grey[500],
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),

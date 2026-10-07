@@ -25,7 +25,10 @@ class ModuleListScreen extends StatefulWidget {
   State<ModuleListScreen> createState() => _ModuleListScreenState();
 }
 
-class _ModuleListScreenState extends State<ModuleListScreen> {
+class _ModuleListScreenState extends State<ModuleListScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   late Future<List<Map<String, dynamic>>> _modulesFuture;
   bool _hasNewNotifications = false;
   final _storage = const FlutterSecureStorage();
@@ -135,6 +138,7 @@ class _ModuleListScreenState extends State<ModuleListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       body: Container(
         width: double.infinity,

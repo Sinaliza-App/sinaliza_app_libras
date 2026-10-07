@@ -8,6 +8,9 @@ import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
 
+import 'package:sinaliza_app_libras/services/libras_inference_service.dart';
+import 'package:sinaliza_app_libras/services/vision_extractor_service.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -20,7 +23,20 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    _warmupAI();
     _checkLoginStatus();
+  }
+
+  Future<void> _warmupAI() async {
+    try {
+      await Future.wait([
+        LibrasInferenceService().initialize(),
+        VisionExtractorService().initialize(),
+      ]);
+      debugPrint("🚀 [AI Warmup] Modelos ONNX e Extrator carregados com sucesso no Splash!");
+    } catch (e) {
+      debugPrint("⚠️ [AI Warmup] Erro no pré-aquecimento: $e");
+    }
   }
 
   Future<void> _checkLoginStatus() async {

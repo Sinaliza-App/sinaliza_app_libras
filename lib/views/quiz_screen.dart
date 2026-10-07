@@ -16,7 +16,10 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> {
+class _QuizScreenState extends State<QuizScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   bool _isLoadingChallenge = false;
 
   Future<void> _startChallengeMode() async {
@@ -62,20 +65,19 @@ class _QuizScreenState extends State<QuizScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: AppColors.darkBG,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
         title: const Text(
-          "Desafios",
+          "DESAFIOS",
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.neonGreen,
             fontWeight: FontWeight.bold,
+            letterSpacing: 2,
           ),
         ),
         centerTitle: true,

@@ -10,19 +10,13 @@ import 'package:sinaliza_app_libras/constants.dart';
 import 'package:confetti/confetti.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:flutter/foundation.dart'; // Para o compute()
 import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/providers/user_provider.dart';
 
 import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
-
 import 'package:sinaliza_app_libras/widgets/streak_dialog.dart';
-
-// --- FUNÇÃO ISOLADA (FORA DA CLASSE) PARA NÃO TRAVAR A UI ---
-String _processFrameInIsolate(Uint8List bytes) {
-  return base64Encode(bytes);
-}
+import 'package:sinaliza_app_libras/services/vision_extractor_service.dart';
+import 'package:sinaliza_app_libras/services/libras_inference_service.dart';
 
 class LessonDetailScreen extends StatefulWidget {
   final Map<String, dynamic> lesson;
@@ -34,12 +28,16 @@ class LessonDetailScreen extends StatefulWidget {
 }
 
 class _LessonDetailScreenState extends State<LessonDetailScreen> {
-  // --- CÂMERA E INFERÊNCIA WEBSOCKET ---
+  // --- IA OFFLINE ---
+  final VisionExtractorService _visionExtractor = VisionExtractorService();
+  final LibrasInferenceService _inferenceService = LibrasInferenceService();
+  final List<List<double>> _frameBuffer = [];
+
+  // --- CÂMERA ---
   CameraController? _cameraController;
   bool _isCameraReady = false;
-  bool _isProcessingFrame = false; // Trava para não afogar o servidor
+  bool _isProcessingFrame = false;
   DateTime? _lastFrameTime;
-  WebSocketChannel? _channel;
   bool _isConnected = false;
 
   // --- ESTADO DO JOGO ---
@@ -48,10 +46,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   bool _isCorrect = false;
   String _targetGesture = "";
   bool _isMovement = false; // Flag para UI adaptativa
+  List<dynamic> _lastLandmarks = []; // Matriz de 30x258
 
   // --- TEMPORIZADOR ---
   DateTime? _firstDetectionTime;
-  int _secondsToHold = 3;
+  DateTime? _lastMatchTime;
+  int _secondsToHold = 2;
   int _secondsHeld = 0;
 
   // --- PROGRESSO E EFEITOS ---
@@ -64,69 +64,56 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     super.initState();
     _extractTargetGesture();
     _initializeCamera();
-    _connectWebSocket();
+    _initializeLocalAI();
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
   }
 
-  void _connectWebSocket() {
+  Future<void> _initializeLocalAI() async {
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(wsBaseUrl));
-      _isConnected = true;
-      
-      _channel!.stream.listen(
-        (dynamic message) {
-          if (!mounted) return;
-          try {
-            final Map<String, dynamic> data = jsonDecode(message as String) as Map<String, dynamic>;
-            final String gesture = (data['prediction'] as String?) ?? "Nenhum";
-            final double confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
-
-            _handleDetectionResult(gesture, confidence);
-          } catch (e) {
-            debugPrint("Erro ao decodificar resposta do WS: $e");
-          } finally {
-            _isProcessingFrame = false;
-          }
-        },
-        onError: (dynamic error) {
-          debugPrint("Erro no WebSocket: $error");
-          _isConnected = false;
-          _isProcessingFrame = false;
-        },
-        onDone: () {
-          debugPrint("WebSocket desconectado");
-          _isConnected = false;
-          _isProcessingFrame = false;
-        },
-      );
+      if (!_visionExtractor.isInitialized) {
+        await _visionExtractor.initialize();
+      }
+      if (!_inferenceService.isInitialized) {
+        await _inferenceService.initialize();
+      }
+      if (mounted) {
+        setState(() {
+          _isConnected = true; // IA pronta
+        });
+      }
     } catch (e) {
-      debugPrint("Falha ao conectar WebSocket: $e");
-      _isConnected = false;
+      debugPrint("Falha ao inicializar IA Local: $e");
+      if (mounted) {
+        CustomSnackBar.showError(context, "Falha ao iniciar IA offline: $e");
+      }
     }
   }
 
   void _extractTargetGesture() {
-    final title = widget.lesson['title'].toString();
-    if (title.contains("Letra ")) {
-      _targetGesture = title.split("Letra ").last.trim();
+    if (widget.lesson['sign_name'] != null && widget.lesson['sign_name'].toString().trim().isNotEmpty) {
+      _targetGesture = widget.lesson['sign_name'].toString().trim();
     } else {
-      _targetGesture = title.split(":").last.trim();
+      final title = widget.lesson['title'].toString();
+      if (title.contains("Letra ")) {
+        _targetGesture = title.split("Letra ").last.trim();
+      } else {
+        _targetGesture = title.split(":").last.trim();
+      }
     }
     
     // Regra Inteligente: Se for movimento, o usuário ganha instantaneamente (0s).
-    // Se for estático (Alfabeto), ele precisa segurar a pose (3s).
+    // Se for estático (Alfabeto), ele precisa segurar a pose (2s).
     final lessonType = (widget.lesson['type'] ?? 'estatico').toString().toLowerCase();
     _isMovement = lessonType == 'movimento' || lessonType == 'dynamic';
-    _secondsToHold = _isMovement ? 0 : 3;
+    _secondsToHold = _isMovement ? 0 : 2;
   }
 
   @override
   void dispose() {
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
-    _channel?.sink.close();
     _confettiController.dispose();
     super.dispose();
   }
@@ -156,76 +143,171 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     }
   }
 
- // --- NOVA LÓGICA WEBSOCKET COM ISOLATE ---
- void _startVisionStream() {
-    _cameraController!.startImageStream((CameraImage image) async {
-      // Ignora se não estiver conectado, se já estiver processando ou se já acertou
+  Future<void> _reportError() async {
+    if (_lastLandmarks.isEmpty || _lastLandmarks.length != 30) {
+      CustomSnackBar.showError(context, "Nenhum dado capturado ainda. Aguarde.");
+      return;
+    }
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final payload = {
+        "user_id": userId,
+        "sign_name": _targetGesture,
+        "source": "mobile_feedback",
+        "reporter_role": "student",
+        "raw_landmarks": _lastLandmarks
+      };
+
+      final response = await ApiService.post('$apiBaseUrl/coleta/amostra', body: jsonEncode(payload));
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (userId != null) {
+          final res = await Supabase.instance.client.from('profiles').select('total_score').eq('id', userId).single();
+          final currentScore = res['total_score'] as int? ?? 0;
+          await Supabase.instance.client.from('profiles').update({'total_score': currentScore + 10}).eq('id', userId);
+        }
+        if (mounted) {
+          Provider.of<UserProvider>(context, listen: false).addScore(10);
+          CustomSnackBar.showSuccess(context, "Amostra enviada para revisão do professor! +10 XP");
+        }
+      } else {
+        if (mounted) CustomSnackBar.showError(context, "Erro ao enviar amostra: ${response.statusCode}");
+      }
+    } catch (e) {
+      if (mounted) CustomSnackBar.showError(context, "Erro de rede ao reportar incorreção.");
+    }
+  }
+
+  // --- INFERÊNCIA OFFLINE OTIMIZADA (SEM TRAVAMENTO DE PREVIEW) ---
+  void _startVisionStream() {
+    _cameraController!.startImageStream((CameraImage image) {
+      // Retorna em 0.001ms para nunca prender a thread de preview da câmera nativa
       if (!_isConnected || _isProcessingFrame || _isCorrect) return;
 
       final now = DateTime.now();
-      // Otimizamos para até 10 frames por segundo de processamento para maior fluidez
-      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < 100) {
-        return;
+      // Throttle: 60ms para dinâmico (~16 FPS) e 100ms para estático (~10 FPS)
+      final int throttleMs = _isMovement ? 60 : 100;
+      if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < throttleMs) {
+        return; 
       }
       
       _lastFrameTime = now;
-      _isProcessingFrame = true; // Trava o envio até a resposta voltar
+      _isProcessingFrame = true;
 
-      try {
-        final plane = image.planes[0];
-        
-        // --- O SEGREDO DO FPS ALTO ---
-        // Usamos o compute() para jogar a conversão pesada Base64 para outra Thread!
-        final String imageBase64 = await compute(_processFrameInIsolate, plane.bytes);
-
-        // Dispara direto no Socket (muito mais rápido que HTTP)
-        _channel!.sink.add(jsonEncode({
-          'image': imageBase64,
-          'width': image.width,
-          'height': image.height,
-          'stride': plane.bytesPerRow,
-          'model_type': (widget.lesson['type'] ?? 'estatico').toString().toLowerCase() == 'movimento' ? 'movimento' : 'alfabeto'
-        }));
-      } catch (e) {
-        debugPrint("Erro no processamento do frame: $e");
-        _isProcessingFrame = false;
-      }
+      // Desacopla o processamento computacional pesado da fila da câmera
+      _processFrameAsync(image);
     });
   }
 
+  Future<void> _processFrameAsync(CameraImage image) async {
+    try {
+      // 1. Extrai o frame (Usa a normalização e espelhamento já criados)
+      final int sensorOrientation = _cameraController!.description.sensorOrientation;
+      final lensDirection = _cameraController!.description.lensDirection;
+      final features = await _visionExtractor.processImage(
+        image, 
+        sensorOrientation,
+        isMovement: _isMovement,
+        lensDirection: lensDirection,
+      );
+
+      // Se o array voltar vazio/zerado (mão não detectada)
+      if (features.every((element) => element == 0.0)) {
+        final now = DateTime.now();
+        if (_lastMatchTime == null || now.difference(_lastMatchTime!).inMilliseconds > 450) {
+          if (_detectedGesture != "Nenhum") {
+            _handleDetectionResult("Nenhum", 0.0);
+          }
+        }
+        return;
+      }
+
+      if (mounted) {
+        // 2. Bufferização
+        _frameBuffer.add(features);
+        if (_frameBuffer.length > 30) {
+          _frameBuffer.removeAt(0);
+        }
+
+        _lastLandmarks = List.from(_frameBuffer);
+
+        // 3. Inferência local no ONNX
+        if (!_isMovement) {
+          // Alfabeto (MLP): Usa apenas o frame atual
+          final result = await _inferenceService.predictAlphabet(features);
+          debugPrint("📝 Resultado Alfabeto: $result");
+          
+          final String gesture = (result['prediction'] as String?) ?? "Nenhum";
+          final double confidence = (result['confidence'] as num?)?.toDouble() ?? 0.0;
+          
+          _handleDetectionResult(gesture, confidence);
+        } else {
+          // Gestos (LSTM): Requer o buffer completo de 30 frames
+          if (_frameBuffer.length == 30) {
+            final result = await _inferenceService.predict(_frameBuffer);
+            debugPrint("🏃‍♂️ Resultado Movimento: $result");
+            
+            final String gesture = (result['prediction'] as String?) ?? "Nenhum";
+            final double confidence = (result['confidence'] as num?)?.toDouble() ?? 0.0;
+            
+            _handleDetectionResult(gesture, confidence);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro no processamento do frame: $e");
+    } finally {
+      final int coolDownMs = _isMovement ? 20 : 60;
+      await Future<void>.delayed(Duration(milliseconds: coolDownMs));
+      if (mounted) _isProcessingFrame = false;
+    }
+  }
+
   String _normalizeGesture(String gesture) {
-    // Troca espaços, barras, hifens por underline e converte pra minúsculo (Padrão do Modelo Python)
-    return gesture.toLowerCase()
-        .replaceAll(RegExp(r'[áàâã]'), 'a')
-        .replaceAll(RegExp(r'[éèê]'), 'e')
-        .replaceAll(RegExp(r'[íìî]'), 'i')
-        .replaceAll(RegExp(r'[óòôõ]'), 'o')
-        .replaceAll(RegExp(r'[úùû]'), 'u')
-        .replaceAll(RegExp(r'[ç]'), 'c')
+    String g = gesture.toLowerCase().trim();
+    // Normalização específica para Ç / C_CEDILHA
+    g = g.replaceAll('c_cedilha', 'c_cedilha')
+         .replaceAll('c-cedilha', 'c_cedilha')
+         .replaceAll('c cedilha', 'c_cedilha')
+         .replaceAll('ç', 'c_cedilha');
+
+    // Remove pontuações (ex: "Tudo bem?" -> "tudo bem")
+    g = g.replaceAll(RegExp(r'[?!.,;:()\[\]{}]'), '');
+
+    return g
+        .replaceAll(RegExp(r'[áàâãä]'), 'a')
+        .replaceAll(RegExp(r'[éèêë]'), 'e')
+        .replaceAll(RegExp(r'[íìîï]'), 'i')
+        .replaceAll(RegExp(r'[óòôõö]'), 'o')
+        .replaceAll(RegExp(r'[úùûü]'), 'u')
         .replaceAll(RegExp(r'[\s/|-]+'), '_')
         .trim();
   }
 
   // --- LÓGICA DE VALIDAÇÃO ISOLADA ---
- void _handleDetectionResult(String gesture, double confidence) async {
-    // Para movimentos confiamos 100% no backend (já que ele filtra a confianca), para estáticos > 0.6
+  void _handleDetectionResult(String gesture, double confidence) async {
     final String normalizedDetected = _normalizeGesture(gesture);
     final String normalizedTarget = _normalizeGesture(_targetGesture);
 
-    final bool isCurrentlyMatching = ((_isMovement || confidence > 0.6) && 
+    debugPrint("🎯 Validando: '$normalizedDetected' vs '$normalizedTarget' (Confiança: $confidence)");
+
+    final double minConfidence = _isMovement ? 0.45 : 0.50;
+    final bool isCurrentlyMatching = (confidence >= minConfidence && 
                                 normalizedDetected == normalizedTarget && 
                                 normalizedDetected != "nenhum");
 
+    final now = DateTime.now();
     if (isCurrentlyMatching) {
+      _lastMatchTime = now;
       if (!_isCorrect) {
         if (_firstDetectionTime == null) {
-          _firstDetectionTime = DateTime.now();
+          _firstDetectionTime = now;
           _secondsHeld = 0;
         } else {
-          _secondsHeld = DateTime.now().difference(_firstDetectionTime!).inSeconds;
+          _secondsHeld = now.difference(_firstDetectionTime!).inSeconds;
         }
 
-        // Se bateu a meta (ex: 3 segundos ou instantâneo)
+        // Se bateu a meta (ex: 2 segundos ou instantâneo)
         if (_secondsHeld >= _secondsToHold) {
           _isCorrect = true;
           _onSuccess();
@@ -233,16 +315,23 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       }
     } else {
       if (!_isCorrect) {
-        // IA piscou ou o usuário mexeu a mão: Zera o cronômetro!
-        _firstDetectionTime = null;
-        _secondsHeld = 0;
+        // Tolerância de 450ms antes de zerar o progresso
+        // Evita que 1 frame com ruído ou piscar de câmera zere o usuário!
+        if (_lastMatchTime == null || now.difference(_lastMatchTime!).inMilliseconds > 450) {
+          _firstDetectionTime = null;
+          _secondsHeld = 0;
+        }
       }
     }
 
     // Atualiza a tela com o que a IA está enxergando agora
     setState(() {
-      _detectedGesture = gesture;
       _detectedConfidence = confidence;
+      if (confidence >= (_isMovement ? 0.40 : 0.45)) {
+        _detectedGesture = gesture;
+      } else {
+        _detectedGesture = "Aguardando...";
+      }
     });
   }
 
@@ -407,6 +496,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
                             onPressed: () => Navigator.pop(context),
                           ),
+                          if (helpImageUrl != null) const SizedBox(width: 48), // Balanceia os 2 ícones da direita
                           Expanded(
                             child: Text(
                               lessonTitle,
@@ -497,26 +587,60 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(20),
-                          child: _isCameraReady
-                              ? LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    return SizedBox(
-                                      width: constraints.maxWidth,
-                                      height: constraints.maxHeight,
-                                      child: FittedBox(
-                                        fit: BoxFit.cover,
-                                        child: SizedBox(
-                                          width: _cameraController!.value.previewSize!.height,
-                                          height: _cameraController!.value.previewSize!.width,
-                                          child: CameraPreview(_cameraController!),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              _isCameraReady
+                                  ? LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        return SizedBox(
+                                          width: constraints.maxWidth,
+                                          height: constraints.maxHeight,
+                                          child: FittedBox(
+                                            fit: BoxFit.cover,
+                                            child: SizedBox(
+                                              width: _cameraController!.value.previewSize!.height,
+                                              height: _cameraController!.value.previewSize!.width,
+                                              child: CameraPreview(_cameraController!),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : const Center(
+                                      child: CircularProgressIndicator(color: AppColors.neonGreen),
+                                    ),
+                              if (!_isConnected)
+                                Container(
+                                  color: Colors.black.withValues(alpha: 0.75),
+                                  child: const Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        CircularProgressIndicator(color: AppColors.neonGreen),
+                                        SizedBox(height: 16),
+                                        Text(
+                                          "Carregando Inteligência Artificial...",
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
                                         ),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : const Center(
-                                  child: CircularProgressIndicator(color: AppColors.neonGreen),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          "Preparando modelos neurais offline",
+                                          style: TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -637,14 +761,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
 
-                    // Botão
+                    // Botão Principal
                     _isSavingProgress
                         ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
                         : SizedBox(
                             width: double.infinity,
-                            height: 56,
+                            height: 54,
                             child: ElevatedButton.icon(
                               icon: Icon(
                                 _isCorrect ? Icons.check_circle : Icons.lock,
@@ -671,7 +795,25 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                               ),
                             ),
                           ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    
+                    // Botão Reportar (Compacto)
+                    SizedBox(
+                      height: 40,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.report_problem, color: AppColors.neonOrange, size: 20),
+                        label: const Text(
+                          "Reportar Incorreção",
+                          style: TextStyle(
+                            color: AppColors.neonOrange,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        onPressed: _reportError,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),

@@ -16,7 +16,9 @@ class DictionaryScreen extends StatefulWidget {
   State<DictionaryScreen> createState() => _DictionaryScreenState();
 }
 
-class _DictionaryScreenState extends State<DictionaryScreen> {
+class _DictionaryScreenState extends State<DictionaryScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
   List<dynamic> _allSigns = [];
   List<dynamic> _filteredSigns = [];
@@ -117,6 +119,7 @@ class _DictionaryScreenState extends State<DictionaryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: AppColors.darkBG,
       appBar: AppBar(
@@ -413,72 +416,78 @@ class _DictionaryZoomScreen extends StatelessWidget {
                         )
                       ],
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          height: 250,
-                          width: 250,
-                          decoration: BoxDecoration(
-                            color: Colors.black26,
-                            borderRadius: BorderRadius.circular(24), 
-                          ),
-                          child: sign['gif_url'] != null || (imageUrl != null && imageUrl.isNotEmpty)
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: Hero(
-                                    tag: 'sign_image_${sign['id'] ?? index}',
-                                    child: _ImageLoader(
-                                      url: sign['gif_url'] ?? imageUrl,
-                                      fit: BoxFit.contain,
+                    child: Center(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              height: 220,
+                              width: 220,
+                              decoration: BoxDecoration(
+                                color: Colors.black26,
+                                borderRadius: BorderRadius.circular(24), 
+                              ),
+                              child: sign['gif_url'] != null || (imageUrl != null && imageUrl.isNotEmpty)
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: Hero(
+                                        tag: 'sign_image_${sign['id'] ?? index}',
+                                        child: _ImageLoader(
+                                          url: sign['gif_url'] ?? imageUrl,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    )
+                                  : const Icon(Icons.front_hand, size: 80, color: Colors.white54),
+                            ),
+                            const SizedBox(height: 24),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: Text(
+                                description,
+                                style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Botão Praticar
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute<dynamic>(
+                                      builder: (context) => LessonDetailScreen(lesson: sign),
                                     ),
+                                  );
+                                },
+                                icon: const Icon(Icons.camera_alt, color: AppColors.darkBG),
+                                label: const Text(
+                                  'PRATICAR ESTE SINAL',
+                                  style: TextStyle(
+                                    color: AppColors.darkBG,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.2,
                                   ),
-                                )
-                              : const Icon(Icons.front_hand, size: 80, color: Colors.white54),
-                        ),
-                        const SizedBox(height: 32),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: Text(
-                            description,
-                            style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        // Botão Praticar
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute<dynamic>(
-                                  builder: (context) => LessonDetailScreen(lesson: sign),
                                 ),
-                              );
-                            },
-                            icon: const Icon(Icons.camera_alt, color: AppColors.darkBG),
-                            label: const Text(
-                              'PRATICAR ESTE SINAL',
-                              style: TextStyle(
-                                color: AppColors.darkBG,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.2,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.neonBlue,
+                                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 10,
+                                  shadowColor: AppColors.neonBlue.withValues(alpha: 0.5),
+                                ),
                               ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.neonBlue,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 10,
-                              shadowColor: AppColors.neonBlue.withValues(alpha: 0.5),
-                            ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

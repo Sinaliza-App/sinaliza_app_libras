@@ -87,45 +87,51 @@ class LessonInstructionScreen extends StatelessWidget {
                           )
                         ],
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            height: 240,
-                            width: 240,
-                            decoration: BoxDecoration(
-                              color: Colors.black26,
-                              borderRadius: BorderRadius.circular(24), // Quadrado arredondado
-                            ),
-                            child: imageUrl != null && imageUrl.isNotEmpty
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(24),
-                                    child: isNetwork 
-                                      ? Image.network(
-                                          imageUrl,
-                                          fit: BoxFit.cover, // Para o gif preencher o círculo
-                                          errorBuilder: (context, error, stackTrace) =>
-                                            const Icon(Icons.broken_image, size: 80, color: Colors.white54),
-                                        )
-                                      : Image.asset( 
-                                          imageUrl,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) =>
-                                            const Icon(Icons.broken_image, size: 80, color: Colors.white54),
-                                        ),
-                                  )
-                                : const Icon(Icons.front_hand, size: 80, color: Colors.white54),
+                      child: Center(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                height: 220,
+                                width: 220,
+                                decoration: BoxDecoration(
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(24), // Quadrado arredondado
+                                ),
+                                child: imageUrl != null && imageUrl.isNotEmpty
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(24),
+                                        child: isNetwork 
+                                          ? Image.network(
+                                              imageUrl,
+                                              fit: BoxFit.cover, // Para o gif preencher o círculo
+                                              errorBuilder: (context, error, stackTrace) =>
+                                                const Icon(Icons.broken_image, size: 80, color: Colors.white54),
+                                            )
+                                          : Image.asset( 
+                                              imageUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) =>
+                                                const Icon(Icons.broken_image, size: 80, color: Colors.white54),
+                                            ),
+                                      )
+                                    : const Icon(Icons.front_hand, size: 80, color: Colors.white54),
+                              ),
+                              const SizedBox(height: 24),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                                child: Text(
+                                  description,
+                                  style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 32),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                            child: Text(
-                              description,
-                              style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
