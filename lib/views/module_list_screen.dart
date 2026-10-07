@@ -1,0 +1,547 @@
+import 'package:flutter/material.dart';
+
+import 'dart:convert';
+import 'package:flutter/services.dart';
+
+import 'package:sinaliza_app_libras/views/lesson_list_screen.dart';
+import 'package:sinaliza_app_libras/views/profile_page.dart';
+import 'package:sinaliza_app_libras/views/login_screen.dart';
+import 'package:sinaliza_app_libras/views/changelog_screen.dart';
+import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
+import 'package:sinaliza_app_libras/widgets/animations/neon_pulse.dart';
+import 'package:provider/provider.dart';
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
+
+class ModuleListScreen extends StatefulWidget {
+  const ModuleListScreen({super.key});
+
+  @override
+  State<ModuleListScreen> createState() => _ModuleListScreenState();
+}
+
+class _ModuleListScreenState extends State<ModuleListScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  late Future<List<Map<String, dynamic>>> _modulesFuture;
+  bool _hasNewNotifications = false;
+  final _storage = const FlutterSecureStorage();
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshModules();
+  }
+
+  void _refreshModules() {
+    setState(() {
+      _modulesFuture = _fetchModules();
+    });
+    _fetchUserData();
+    _checkNotifications();
+  }
+
+  Future<void> _checkNotifications() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('notifications')
+          .select('created_at')
+          .order('created_at', ascending: false)
+          .limit(1);
+          
+      if (response.isNotEmpty) {
+        final latestNotificationDate = DateTime.parse(response[0]['created_at'] as String);
+        final userId = Supabase.instance.client.auth.currentUser?.id ?? 'guest';
+        final lastSeenString = await _storage.read(key: 'last_seen_notification_date_$userId');
+        
+        if (lastSeenString == null) {
+          if (mounted) setState(() => _hasNewNotifications = true);
+        } else {
+          final lastSeenDate = DateTime.parse(lastSeenString);
+          if (latestNotificationDate.isAfter(lastSeenDate)) {
+            if (mounted) setState(() => _hasNewNotifications = true);
+          } else {
+             if (mounted) setState(() => _hasNewNotifications = false);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro ao verificar notificações: $e");
+    }
+  }
+
+  Future<void> _fetchUserData() async {
+    try {
+      final response = await ApiService.get('$apiBaseUrl/users/me');
+      if (response.statusCode == 200) {
+        final userData = json.decode(response.body);
+        if (userData['total_score'] != null) {
+          userData['total_score'] = int.tryParse(userData['total_score'].toString()) ?? 0;
+        }
+        if (mounted) {
+          Provider.of<UserProvider>(context, listen: false).setUser(userData as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro ao carregar dados do usuário na main: $e");
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchModules() async {
+    try {
+      final response = await ApiService.get('$apiBaseUrl/modules');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body) as List<dynamic>;
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        if (response.statusCode == 401) _logout();
+        throw Exception('Erro ao carregar módulos');
+      }
+    } catch (e) {
+      debugPrint("Erro de conexão: $e");
+      throw Exception('Erro de conexão: $e');
+    }
+  }
+
+  void _logout() async {
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute<dynamic>(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  IconData _getModuleIcon(String? iconName) {
+    switch (iconName) {
+      case 'alphabet':
+        return Icons.sort_by_alpha;
+      case 'day to day':
+        return Icons.waving_hand;
+      case 'colors':
+        return Icons.palette;
+      case 'animals':
+        return Icons.pets;
+      case 'verbs':
+        return Icons.run_circle_outlined;
+      default:
+        return Icons.class_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.darkBG, AppColors.darkBG2],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ---------------- HEADER LIMPO ----------------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // ESQUERDA: Logo
+                    const Row(
+                      children: [
+                        Icon(Icons.waving_hand_outlined, color: AppColors.neonGreen, size: 26),
+                        SizedBox(width: 8),
+                        Text(
+                          'SINALIZA',
+                          style: TextStyle(
+                            color: AppColors.neonGreen,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // DIREITA: Ofensiva + Foto de Perfil
+                    Row(
+                      children: [
+                        // Ofensiva (Foguinho)
+                        Consumer<UserProvider>(
+                          builder: (context, userProvider, child) {
+                            final user = userProvider.user;
+                            final int streak = user?.streakCount ?? 0;
+                            final bool isLit = streak > 0;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isLit
+                                    ? AppColors.neonOrange.withValues(alpha: 0.15)
+                                    : Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isLit
+                                      ? AppColors.neonOrange.withValues(alpha: 0.5)
+                                      : Colors.transparent,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.local_fire_department_rounded,
+                                    color: isLit ? AppColors.neonOrange : Colors.grey,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$streak',
+                                    style: TextStyle(
+                                      color: isLit ? AppColors.neonOrange : Colors.grey,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        // Ícone de Notificações (Mural de Novidades)
+                        GestureDetector(
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute<dynamic>(builder: (_) => const ChangelogScreen()),
+                            );
+                            _checkNotifications(); // Recheca ao voltar
+                          },
+                          child: Stack(
+                            alignment: Alignment.topRight,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                  border: Border.all(color: Colors.transparent),
+                                ),
+                                child: Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: _hasNewNotifications ? AppColors.neonBlue : Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                              if (_hasNewNotifications)
+                                const Positioned(
+                                  right: 2,
+                                  top: 2,
+                                  child: NeonPulse(
+                                    neonColor: AppColors.neonBlue,
+                                    child: CircleAvatar(
+                                      radius: 4,
+                                      backgroundColor: AppColors.neonBlue,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Foto de Perfil
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute<dynamic>(builder: (_) => const ProfilePage()),
+                          ).then((_) {
+                            if (mounted) _refreshModules();
+                          }),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.neonBlue.withValues(alpha: 0.4),
+                                width: 2,
+                              ),
+                            ),
+                            child: Consumer<UserProvider>(
+                              builder: (context, userProvider, child) {
+                                final user = userProvider.user;
+                                if (user != null &&
+                                    user.profilePicture != null &&
+                                    user.profilePicture!.isNotEmpty) {
+                                  final ImageProvider? imageProvider = (() {
+                                    try {
+                                      String base64Str = user.profilePicture!;
+                                      if (base64Str.startsWith('http')) {
+                                        return NetworkImage(base64Str) as ImageProvider;
+                                      }
+                                      if (base64Str.contains(',')) {
+                                        base64Str = base64Str.split(',').last;
+                                      }
+                                      base64Str = base64Str.replaceAll(RegExp(r'\s+'), '');
+                                      while (base64Str.length % 4 != 0) {
+                                        base64Str += '=';
+                                      }
+                                      return MemoryImage(base64Decode(base64Str)) as ImageProvider;
+                                    } catch (e) {
+                                      return null;
+                                    }
+                                  })();
+                                  if (imageProvider != null) {
+                                    return CircleAvatar(
+                                      radius: 18,
+                                      backgroundImage: imageProvider,
+                                    );
+                                  }
+                                }
+                                return const CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Colors.transparent,
+                                  child: Icon(Icons.person, color: Colors.white),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              // ---------------- LISTA DE MÓDULOS ----------------
+              Expanded(child: _buildModulesList()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModulesList() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _modulesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.neonGreen),
+          );
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Erro ao carregar módulos',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                ),
+                TextButton(
+                  onPressed: _refreshModules,
+                  child: const Text('Tentar Novamente', style: TextStyle(color: AppColors.neonGreen)),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final modules = snapshot.data!;
+        if (modules.isEmpty) {
+          return const EmptyStateWidget(
+            icon: Icons.school_rounded,
+            title: 'Nenhum módulo disponível',
+            subtitle: 'Os módulos de Libras serão adicionados em breve. Fique ligado!',
+            color: AppColors.neonGreen,
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async => _refreshModules(),
+          color: AppColors.neonGreen,
+          backgroundColor: AppColors.cardDark,
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            itemCount: modules.length,
+            itemBuilder: (context, index) {
+              final module = modules[index];
+              final color = [AppColors.neonGreen, AppColors.neonPurple, AppColors.neonBlue, AppColors.neonOrange][index % 4];
+              final icon = _getModuleIcon(module['icon_name'] as String?);
+
+              final int total = (module['total_lessons'] as int?) ?? 0;
+              final int completed = (module['completed_lessons'] as int?) ?? 0;
+              final double progress = total == 0 ? 0.0 : (completed / total);
+              final String progressText = "${(progress * 100).toInt()}%";
+
+              return FadeInSlide(
+                duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
+                yOffset: 20.0,
+                child: GestureDetector(
+                  onTap: () async {
+                    HapticFeedback.lightImpact();
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute<dynamic>(
+                        builder: (context) => LessonListScreen(
+                          moduleId: module['id'] as int,
+                          moduleTitle: module['title'] as String,
+                          iconName: module['icon_name'] as String?,
+                        ),
+                      ),
+                    );
+                    if (mounted) _refreshModules();
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardDark,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.08),
+                          blurRadius: 15,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Row(
+                        children: [
+                          // Ícone com Hero
+                          Hero(
+                            tag: 'module_icon_${module['id']}',
+                            child: progress == 1.0
+                                ? NeonPulse(neonColor: color, child: _buildIconContainer(icon, color))
+                                : _buildIconContainer(icon, color),
+                          ),
+                          const SizedBox(width: 20),
+                          // Textos
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      "MÓDULO ${index + 1}",
+                                      style: TextStyle(
+                                        color: color,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                    if (module['is_draft'] == true) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withValues(alpha: 0.2),
+                                          border: Border.all(color: Colors.orange),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          "RASCUNHO",
+                                          style: TextStyle(
+                                            color: Colors.orange,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  module['title'] as String,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      backgroundColor: Colors.grey[900],
+                                      color: color,
+                                      minHeight: 6,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  "$completed de $total lições ($progressText)",
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8.0),
+                            child: Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              color: Colors.white.withValues(alpha: 0.3),
+                              size: 20,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildIconContainer(IconData icon, Color color) {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.2),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Icon(icon, color: color, size: 35),
+    );
+  }
+}

@@ -1,0 +1,569 @@
+import 'package:flutter/material.dart';
+import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'package:sinaliza_app_libras/views/lesson_detail_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
+import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/animations/fade_in_slide.dart';
+import 'package:sinaliza_app_libras/widgets/custom_snackbar.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
+
+class DictionaryScreen extends StatefulWidget {
+  const DictionaryScreen({super.key});
+
+  @override
+  State<DictionaryScreen> createState() => _DictionaryScreenState();
+}
+
+class _DictionaryScreenState extends State<DictionaryScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  List<dynamic> _allSigns = [];
+  List<dynamic> _filteredSigns = [];
+  bool _isLoading = true;
+  bool _showFavoritesOnly = false;
+  String _searchQuery = "";
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDictionary();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+
+  Future<void> _fetchDictionary() async {
+    try {
+      final response = await ApiService.get('$apiBaseUrl/dictionary');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body) as List<dynamic>;
+        if (mounted) {
+          setState(() {
+            _allSigns = data;
+            _filteredSigns = data;
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception('Erro ao carregar dicionário');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        CustomSnackBar.showError(context, 'Erro de conexão ao carregar o dicionário.');
+      }
+    }
+  }
+
+  void _filterSigns(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredSigns = _allSigns;
+      } else {
+        _filteredSigns = _allSigns.where((sign) {
+          final title = (sign['title'] ?? '').toString().toLowerCase();
+          return title.contains(query.toLowerCase());
+        }).toList();
+      }
+      
+      if (_showFavoritesOnly) {
+        _filteredSigns = _filteredSigns.where((sign) => sign['is_favorite'] == true).toList();
+      }
+    });
+  }
+
+  Future<void> _toggleFavorite(Map<String, dynamic> sign) async {
+    final int signId = sign['id'] as int;
+    try {
+      final response = await ApiService.post('$apiBaseUrl/dictionary/favorite',
+        body: json.encode({'sign_id': signId}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        final bool newFav = data['is_favorite'] as bool;
+        
+        setState(() {
+          final indexAll = _allSigns.indexWhere((s) => s['id'] == signId);
+          if (indexAll != -1) _allSigns[indexAll]['is_favorite'] = newFav;
+
+          final indexFiltered = _filteredSigns.indexWhere((s) => s['id'] == signId);
+          if (indexFiltered != -1) _filteredSigns[indexFiltered]['is_favorite'] = newFav;
+
+          if (_showFavoritesOnly && !newFav && indexFiltered != -1) {
+             _filteredSigns.removeAt(indexFiltered);
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.showError(context, 'Erro ao atualizar favorito.');
+      }
+    }
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _filterSigns("");
+    FocusScope.of(context).unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Scaffold(
+      backgroundColor: AppColors.darkBG,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'DICIONÁRIO',
+          style: TextStyle(
+            color: AppColors.neonGreen,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2,
+            fontSize: 22,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _showFavoritesOnly ? Icons.favorite : Icons.favorite_border,
+              color: _showFavoritesOnly ? AppColors.neonRed : Colors.white,
+            ),
+            onPressed: () {
+              setState(() {
+                _showFavoritesOnly = !_showFavoritesOnly;
+              });
+              _filterSigns(_searchQuery);
+            },
+            tooltip: 'Apenas Favoritos',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Barra de Busca
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _filterSigns,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.cardDark,
+                hintText: 'Pesquisar sinal (ex: Bom dia)',
+                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+                prefixIcon: const Icon(Icons.search, color: AppColors.neonGreen),
+                suffixIcon: _searchQuery.isNotEmpty 
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: _clearSearch,
+                      )
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: AppColors.neonGreen.withValues(alpha: 0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.neonGreen, width: 2),
+                ),
+              ),
+            ),
+          ),
+          
+          // Lista de Sinais
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
+                : _filteredSigns.isEmpty
+                    ? Center(
+                        child: EmptyStateWidget(
+                          icon: _searchQuery.isEmpty ? Icons.menu_book_rounded : Icons.search_off_rounded,
+                          title: _searchQuery.isEmpty ? 'Dicionário Vazio' : 'Sinal não encontrado',
+                          subtitle: _searchQuery.isEmpty 
+                              ? 'Nenhum sinal encontrado no banco de dados.'
+                              : 'Não encontramos nenhum sinal para "$_searchQuery". Tente outra palavra.',
+                          color: AppColors.neonGreen,
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        itemCount: _filteredSigns.length,
+                        itemBuilder: (context, index) {
+                          final sign = _filteredSigns[index] as Map<String, dynamic>;
+                          return FadeInSlide(
+                            duration: Duration(milliseconds: 300 + (index * 50).clamp(0, 500)),
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute<dynamic>(
+                                    builder: (context) => _DictionaryZoomScreen(sign: sign, index: index),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: AppColors.cardDark,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: AppColors.neonBlue.withValues(alpha: 0.3),
+                                  width: 1.5,
+                                ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                children: [
+                                  // Imagem do Sinal
+                                  Hero(
+                                    tag: 'sign_image_${sign['id'] ?? index}',
+                                    child: Container(
+                                      width: 80,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: AppColors.neonBlue.withValues(alpha: 0.5)),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(15),
+                                        child: _ImageLoader(
+                                          url: sign['thumbnail_url'] ?? sign['example_image_url'],
+                                          isThumbnail: true,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  
+                                  // Textos
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          (sign['title'] as String?) ?? 'Sem Título',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        const Row(
+                                          children: [
+                                            Icon(
+                                              Icons.touch_app_rounded,
+                                              color: AppColors.neonGreen,
+                                              size: 16,
+                                            ),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              'Sinal Prático',
+                                              style: TextStyle(
+                                                color: AppColors.neonGreen,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      sign['is_favorite'] == true ? Icons.favorite : Icons.favorite_border,
+                                      color: sign['is_favorite'] == true ? AppColors.neonRed : Colors.white54,
+                                    ),
+                                    onPressed: () {
+                                      _toggleFavorite(sign);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- TELA DE DETALHES DO DICIONÁRIO (ZOOM) ---
+class _DictionaryZoomScreen extends StatelessWidget {
+  final Map<String, dynamic> sign;
+  final int index;
+
+  const _DictionaryZoomScreen({required this.sign, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    final String title = (sign['title'] as String?) ?? 'Sem Título';
+    final String description = (sign['description'] as String?) ?? 'Sem descrição disponível.';
+    final String? imageUrl = sign['example_image_url'] as String?;
+
+    return Scaffold(
+      backgroundColor: AppColors.darkBG,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flag_outlined, color: AppColors.neonRed),
+            tooltip: 'Reportar problema',
+            onPressed: () async {
+              final desc = await _showReportDialog(context);
+              if (desc != null && desc.trim().isNotEmpty) {
+                try {
+                  final userId = Supabase.instance.client.auth.currentUser?.id;
+                  await Supabase.instance.client.from('reports').insert({
+                    'user_id': userId,
+                    'target_type': 'sign',
+                    'target_id': sign['id'],
+                    'description': desc,
+                  });
+                  if (!context.mounted) return;
+                  CustomSnackBar.showSuccess(context, 'Report enviado aos administradores!');
+                } catch (e) {
+                  if (!context.mounted) return;
+                  CustomSnackBar.showError(context, 'Erro ao enviar report.');
+                }
+              }
+            },
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.darkBG, Color.fromARGB(255, 7, 19, 44)],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  "DICIONÁRIO DE LIBRAS",
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 15),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.neonGreen,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 40),
+                
+                // CARTÃO DA IMAGEM
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.cardDark,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.neonGreen.withValues(alpha: 0.05),
+                          blurRadius: 30,
+                          spreadRadius: 0,
+                        )
+                      ],
+                    ),
+                    child: Center(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              height: 220,
+                              width: 220,
+                              decoration: BoxDecoration(
+                                color: Colors.black26,
+                                borderRadius: BorderRadius.circular(24), 
+                              ),
+                              child: sign['gif_url'] != null || (imageUrl != null && imageUrl.isNotEmpty)
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: Hero(
+                                        tag: 'sign_image_${sign['id'] ?? index}',
+                                        child: _ImageLoader(
+                                          url: sign['gif_url'] ?? imageUrl,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    )
+                                  : const Icon(Icons.front_hand, size: 80, color: Colors.white54),
+                            ),
+                            const SizedBox(height: 24),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: Text(
+                                description,
+                                style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Botão Praticar
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute<dynamic>(
+                                      builder: (context) => LessonDetailScreen(lesson: sign),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.camera_alt, color: AppColors.darkBG),
+                                label: const Text(
+                                  'PRATICAR ESTE SINAL',
+                                  style: TextStyle(
+                                    color: AppColors.darkBG,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.neonBlue,
+                                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 10,
+                                  shadowColor: AppColors.neonBlue.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- NOVA FUNÇÃO: REPORTAR (DENÚNCIA) ---
+  Future<String?> _showReportDialog(BuildContext context) async {
+    final TextEditingController descCtrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardDark,
+        title: const Text("Reportar Problema", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: descCtrl,
+          maxLines: 3,
+          style: const TextStyle(color: Colors.white),
+          cursorColor: AppColors.neonRed,
+          decoration: const InputDecoration(
+            hintText: "O que há de errado neste sinal?",
+            hintStyle: TextStyle(color: Colors.grey),
+            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.neonRed)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, descCtrl.text),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.neonRed, foregroundColor: Colors.white),
+            child: const Text("ENVIAR"),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- WIDGET HELPER PARA IMAGENS E GIFS ---
+class _ImageLoader extends StatelessWidget {
+  final dynamic url;
+  final bool isThumbnail;
+  final BoxFit fit;
+
+  const _ImageLoader({required this.url, this.isThumbnail = false, this.fit = BoxFit.cover});
+
+  @override
+  Widget build(BuildContext context) {
+    if (url == null || url.toString().isEmpty) {
+      return const Icon(Icons.image_not_supported, color: Colors.grey);
+    }
+    
+    final String urlStr = url.toString();
+    
+    if (urlStr.startsWith('http')) {
+      return Image.network(
+        urlStr,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+      );
+    } else {
+      return Image.asset(
+        urlStr,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+      );
+    }
+  }
+}

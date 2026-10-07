@@ -1,0 +1,492 @@
+import 'package:flutter/material.dart';
+import 'package:sinaliza_app_libras/services/api_service.dart';
+import 'dart:convert';
+import 'package:sinaliza_app_libras/constants.dart';
+import 'package:sinaliza_app_libras/theme/app_colors.dart';
+import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
+
+// Removido controle global obsoleto
+
+class RankingScreen extends StatefulWidget {
+  const RankingScreen({super.key});
+
+  @override
+  State<RankingScreen> createState() => _RankingScreenState();
+}
+
+class _RankingScreenState extends State<RankingScreen> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  List<dynamic> _ranking = [];
+  bool _isLoading = true;
+
+  late AnimationController _entranceController;
+  late Animation<double> _podium3Animation;
+  late Animation<double> _podium2Animation;
+  late Animation<double> _podium1Animation;
+
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+
+  @override
+  void initState() {
+    super.initState();
+
+    _entranceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2500));
+    _podium3Animation = CurvedAnimation(parent: _entranceController, curve: const Interval(0.0, 0.5, curve: Curves.easeOutCubic));
+    _podium2Animation = CurvedAnimation(parent: _entranceController, curve: const Interval(0.2, 0.7, curve: Curves.easeOutCubic));
+    _podium1Animation = CurvedAnimation(parent: _entranceController, curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic));
+
+    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.2).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+
+    // Roda a animação toda vez que a tela for aberta
+    _entranceController.forward(from: 0.0);
+
+    _fetchRanking();
+  }
+
+  @override
+  void dispose() {
+    _entranceController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  ImageProvider? _safeDecodeBase64(String? base64StrNullable) {
+    if (base64StrNullable == null || base64StrNullable.isEmpty) return null;
+    try {
+      String imageStr = base64StrNullable;
+      if (imageStr.startsWith('http')) {
+        return NetworkImage(imageStr);
+      }
+      if (imageStr.contains(',')) {
+        imageStr = imageStr.split(',').last;
+      }
+      // Remove espaços em branco e quebras de linha
+      imageStr = imageStr.replaceAll(RegExp(r'\s+'), '');
+      // Conserta o padding se não for múltiplo de 4
+      while (imageStr.length % 4 != 0) {
+        imageStr += '=';
+      }
+      return MemoryImage(base64Decode(imageStr));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // --- LOGICA DAS LIGAS ---
+  Color _getLeagueColor(int score) {
+    if (score >= 1100) return AppColors.diamond; // Diamante
+    if (score >= 600) return AppColors.neonGold; // Ouro
+    if (score >= 300) return AppColors.neonSilver; // Prata
+    return AppColors.neonBronze; // Bronze
+  }
+
+  IconData _getLeagueIcon(int score) {
+    if (score >= 1100) return Icons.diamond_rounded;
+    if (score >= 600) return Icons.emoji_events;
+    if (score >= 300) return Icons.military_tech;
+    return Icons.shield;
+  }
+
+  Future<void> _fetchRanking() async {
+    // Ajuste o IP conforme necessário
+    final url = '$apiBaseUrl/ranking'; 
+
+    try {
+      final response = await ApiService.get(url);
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            _ranking = json.decode(response.body) as List<dynamic>;
+            // Pré-decodifica as imagens aqui para não travar a UI a cada frame
+            for (var user in _ranking) {
+              if (user is Map) {
+                user['decoded_image'] = _safeDecodeBase64(user['profile_picture']?.toString());
+              }
+            }
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Erro ranking: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final double screenHeight = MediaQuery.of(context).size.height;
+    final double topSpacing = MediaQuery.of(context).padding.top + kToolbarHeight + 10;
+    final double podiumHeight = (screenHeight * 0.40).clamp(280.0, 360.0);
+
+    return Scaffold(
+      extendBodyBehindAppBar: true, // Faz o degradê ir até o topo
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          "RANKING GLOBAL",
+          style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold, letterSpacing: 2),
+        ),
+        centerTitle: true,
+      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.darkBG, AppColors.darkBG2],
+          ),
+        ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
+            : _ranking.isEmpty
+                ? const EmptyStateWidget(
+                    icon: Icons.emoji_events_rounded,
+                    title: 'O pódio está vazio!',
+                    subtitle: 'Seja o primeiro a pontuar completando lições e desafios.',
+                    color: AppColors.neonGold,
+                  )
+                : Column(
+                    children: [
+                      SizedBox(height: topSpacing),
+
+                      // --- PÓDIO (TOP 3) ---
+                      if (_ranking.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: SizedBox(
+                            height: podiumHeight, // Altura dinâmica calculada
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // 2º LUGAR (Esquerda)
+                                if (_ranking.length > 1)
+                                  _buildPodiumPlace(
+                                    user: _ranking[1],
+                                    position: 2,
+                                    color: AppColors.neonSilver,
+                                    height: podiumHeight * 0.26,
+                                  ),
+                                
+                                // 1º LUGAR (Centro - Maior)
+                                _buildPodiumPlace(
+                                  user: _ranking[0],
+                                  position: 1,
+                                  color: AppColors.neonGold,
+                                  height: podiumHeight * 0.36,
+                                  isFirst: true,
+                                ),
+
+                                // 3º LUGAR (Direita)
+                                if (_ranking.length > 2)
+                                  _buildPodiumPlace(
+                                    user: _ranking[2],
+                                    position: 3,
+                                    color: AppColors.neonBronze,
+                                    height: podiumHeight * 0.18,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                      const SizedBox(height: 16),
+
+                      // --- LISTA DO RESTO (4º em diante) ---
+                      Expanded(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: AppColors.cardDark,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(30),
+                              topRight: Radius.circular(30),
+                            ),
+                          ),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 40),
+                            itemCount: _ranking.length > 3 ? _ranking.length - 3 : 0,
+                            itemBuilder: (context, index) {
+                              final user = _ranking[index + 3];
+                              final position = index + 4;
+                              
+                              return AnimatedBuilder(
+                                animation: _entranceController,
+                                builder: (context, child) {
+                                  final double start = 0.5 + (index * 0.05);
+                                  final double end = start + 0.3;
+                                  
+                                  double itemValue = 1.0;
+                                  if (!_entranceController.isCompleted) {
+                                    if (_entranceController.value <= start) {
+                                      itemValue = 0.0;
+                                    } else if (_entranceController.value >= end) {
+                                      itemValue = 1.0;
+                                    } else {
+                                      itemValue = (_entranceController.value - start) / (end - start);
+                                    }
+                                    itemValue = Curves.easeOutCubic.transform(itemValue.clamp(0.0, 1.0));
+                                  }
+
+                                  return Transform.translate(
+                                    offset: Offset(0, 50 * (1 - itemValue)),
+                                    child: Opacity(
+                                      opacity: itemValue,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.05),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // Posição
+                                      Text(
+                                        "$position",
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.5),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      
+                                      // Avatar Pequeno
+                                      Builder(
+                                        builder: (context) {
+                                          final ImageProvider? imageProvider = user['decoded_image'] as ImageProvider?;
+                                          final Widget fallbackText = Text(
+                                            user['name'].toString().substring(0, 1).toUpperCase(),
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                          );
+
+                                          return CircleAvatar(
+                                            radius: 20,
+                                            backgroundColor: Colors.blueGrey,
+                                            backgroundImage: imageProvider,
+                                            child: imageProvider == null ? fallbackText : null,
+                                          );
+                                        }
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      // Nome
+                                      Expanded(
+                                        child: Text(
+                                          user['name'] as String,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+
+                                      // XP e Liga
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            "${user['total_score']} XP",
+                                            style: TextStyle(
+                                              color: _getLeagueColor(user['total_score'] as int),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                _getLeagueIcon(user['total_score'] as int),
+                                                color: _getLeagueColor(user['total_score'] as int),
+                                                size: 14,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                (user['total_score'] as int) >= 1100 ? "Diamante" : 
+                                                (user['total_score'] as int) >= 600 ? "Ouro" :
+                                                (user['total_score'] as int) >= 300 ? "Prata" : "Bronze",
+                                                style: TextStyle(
+                                                  color: _getLeagueColor(user['total_score'] as int).withValues(alpha: 0.8),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+      ),
+    );
+  }
+
+  // Widget Auxiliar para desenhar cada pilar do pódio
+  Widget _buildPodiumPlace({
+    required dynamic user,
+    required int position,
+    required Color color,
+    required double height,
+    bool isFirst = false,
+  }) {
+    final Animation<double> podiumAnim = position == 3 ? _podium3Animation : (position == 2 ? _podium2Animation : _podium1Animation);
+
+    return Expanded(
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_entranceController, _pulseController]),
+        builder: (context, child) {
+          return _buildPodiumContent(
+            user, 
+            position, 
+            color, 
+            height, 
+            isFirst, 
+            podiumAnim.value, 
+            _pulseAnimation.value
+          );
+        },
+      ),
+    );
+  }
+
+  // Conteúdo isolado para reaproveitar com ou sem animação
+  Widget _buildPodiumContent(dynamic user, int position, Color color, double height, bool isFirst, double entranceValue, double pulseValue) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // Elementos do topo do pilar ganham fadeIn
+        Opacity(
+          opacity: entranceValue.clamp(0.0, 1.0),
+          child: Column(
+            children: [
+              // Coroa para o 1º lugar
+              if (isFirst) 
+                 const Icon(Icons.emoji_events, color: AppColors.neonGold, size: 32),
+              
+              const SizedBox(height: 4),
+
+              // Avatar no topo do pilar
+              Builder(
+                builder: (context) {
+                  final ImageProvider? imageProvider = user['decoded_image'] as ImageProvider?;
+                  final Widget fallbackText = Text(
+                    user['name'].toString().substring(0, 1).toUpperCase(),
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: isFirst ? 20 : 16,
+                    ),
+                  );
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: color, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.5), 
+                          blurRadius: (8 * pulseValue).clamp(0.0, double.infinity), // Respiração contínua
+                          spreadRadius: (2 * pulseValue).clamp(0.0, double.infinity)
+                        )
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: isFirst ? 28 : 22,
+                      backgroundColor: AppColors.cardDark,
+                      backgroundImage: imageProvider,
+                      child: imageProvider == null ? fallbackText : null,
+                    ),
+                  );
+                }
+              ),
+              const SizedBox(height: 4),
+              
+              // Nome do Usuário
+              Text(
+                (user['name'] as String).split(" ")[0], // Pega só o primeiro nome
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+              
+              // Pontuação
+              Text(
+                "${user['total_score']} XP",
+                style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.w500),
+              ),
+
+              const SizedBox(height: 6),
+            ],
+          ),
+        ),
+
+        // O Pilar (Barra Colorida) cresce do zero
+        Container(
+          width: double.infinity,
+          height: (height * entranceValue).clamp(0.0, double.infinity), // Cresce de forma suave e não pode ser negativo
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.2), // Cor transparente
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+            ),
+            border: Border.all(
+              color: color.withValues(alpha: 0.5),
+              width: 1.5 * entranceValue.clamp(0.0, 1.0),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                color.withValues(alpha: 0.3),
+                color.withValues(alpha: 0.0),
+              ]
+            )
+          ),
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Opacity(
+                  opacity: entranceValue.clamp(0.0, 1.0),
+                  child: Text(
+                    position == 1 ? "🥇" : (position == 2 ? "🥈" : "🥉"),
+                    style: TextStyle(
+                      fontSize: isFirst ? 45 : 30,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
