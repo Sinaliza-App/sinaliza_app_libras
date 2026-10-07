@@ -148,12 +148,12 @@ class _QuizScreenState extends State<QuizScreen> with AutomaticKeepAliveClientMi
                 ),
                 const SizedBox(height: 40),
   
-                // Botão Quiz Teórico
+                // Botão Quiz Diário
                 _buildAnimatedCard(
                   delay: 0.1,
                   child: _buildMenuCard(
-                    title: "Quiz Teórico",
-                    description: "Teste seus conhecimentos de múltipla escolha com imagens e GIFs.",
+                    title: "Quiz Diário",
+                    description: "Teste seus conhecimentos de múltipla escolha com imagens e GIFs (1 vez por dia).",
                     icon: Icons.image_search_rounded,
                     color: AppColors.neonBlue,
                     onTap: () {

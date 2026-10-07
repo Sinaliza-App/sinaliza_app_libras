@@ -373,9 +373,27 @@ class _TheoreticalQuizScreenState extends State<TheoreticalQuizScreen> with Tick
               ),
               const SizedBox(height: 12),
               Text(
-                'Você já completou o seu desafio diário. Descanse um pouco e volte amanhã para manter sua ofensiva e ganhar mais XP!',
+                'Você já completou o seu quiz diário de hoje. Descanse um pouco e volte amanhã para manter sua ofensiva e ganhar mais XP!',
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 16),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text(
+                    'VOLTAR AO MENU',
+                    style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.neonOrange,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
             ],
@@ -418,7 +436,7 @@ class _TheoreticalQuizScreenState extends State<TheoreticalQuizScreen> with Tick
               ),
               const SizedBox(height: 12),
               Text(
-                'Teste seus conhecimentos em Libras!',
+                'Teste seus conhecimentos em Libras! (1 chance por dia)',
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 16),
                 textAlign: TextAlign.center,
               ),
@@ -469,6 +487,21 @@ class _TheoreticalQuizScreenState extends State<TheoreticalQuizScreen> with Tick
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     elevation: 8,
                     shadowColor: AppColors.neonPurple.withValues(alpha: 0.4),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Botão Voltar
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white70),
+                  label: const Text(
+                    'Voltar ao Menu',
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
                   ),
                 ),
               ),

@@ -72,17 +72,12 @@ class VisionExtractorService {
 
       if (hands.length == 1) {
         final hand = hands.first;
-        final pt0 = _toScreenCoords(hand.landmarks[0], cameraRotation, lensDirection);
-        final double screenX = pt0.$1;
-
-        // Para sinais dinâmicos (LSTM):
-        // Se a mão estiver no lado direito da tela (screenX >= 0.40), mapeia para Right Hand (195..257).
-        // Se estiver no lado esquerdo (screenX < 0.40), mapeia para Left Hand (132..194).
-        // Para Alfabeto estático (!isMovement):
-        // O modelo MLP foi treinado com 100% de acurácia no slot 132..194 (leftHandLandmarks no MediaPipe Holistic).
-        // Colocamos sempre no slot 132..194.
-        final bool assignToRight = isMovement && (screenX >= 0.40);
-        final targetList = assignToRight ? rawRightHand : rawLeftHand;
+        // Se há apenas 1 mão em quadro:
+        // Colocamos sempre no slot primário (rawLeftHand: 132..194).
+        // O LibrasInferenceService (tanto MLP quanto LSTM) possui Dual Candidate
+        // que avalia automaticamente o slot normal e o slot invertido se a confiança for baixa.
+        // Isso evita que a mão "salte" de slot no meio do movimento (ex: screenX cruzando a tela).
+        final targetList = rawLeftHand;
 
         final handMarks = hand.landmarks;
         for (int i = 0; i < 21 && i < handMarks.length; i++) {

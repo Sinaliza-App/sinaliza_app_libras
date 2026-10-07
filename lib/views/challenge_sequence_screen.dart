@@ -131,7 +131,7 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     // Se for estático (Alfabeto), ele precisa segurar a pose (2s).
     final lessonType = (lesson['type'] ?? 'estatico').toString().toLowerCase();
     _isMovement = lessonType == 'movimento' || lessonType == 'dynamic';
-    _secondsToHold = _isMovement ? 0 : 2;
+    _secondsToHold = _isMovement ? 0 : 1;
     _challengeTimeLeft = 10;
     _isCorrect = false;
     _firstDetectionTime = null;
@@ -312,8 +312,8 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
       }
 
       final now = DateTime.now();
-      // Throttle: 60ms para dinâmico (~16 FPS) e 100ms para estático (~10 FPS)
-      final int throttleMs = _isMovement ? 60 : 100;
+      // Throttle: 35ms para dinâmico (~28 FPS para 30 frames em ~1s) e 70ms para estático (~14 FPS)
+      final int throttleMs = _isMovement ? 35 : 70;
       if (_lastFrameTime != null && now.difference(_lastFrameTime!).inMilliseconds < throttleMs) {
         return;
       }
@@ -418,7 +418,7 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
 
     debugPrint("🎯 Challenge Validando: '$normalizedDetected' vs '$normalizedTarget' (Confiança: $confidence)");
 
-    final double minConfidence = _isMovement ? 0.45 : 0.50;
+    final double minConfidence = _isMovement ? 0.35 : 0.40;
     final bool isCurrentlyMatching = (confidence >= minConfidence &&
         normalizedDetected == normalizedTarget &&
         normalizedDetected != "nenhum");
@@ -436,7 +436,7 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
               .inSeconds;
         }
 
-        // Se bateu a meta (ex: 2 segundos ou instantâneo)
+        // Se bateu a meta (ex: 1 segundo ou instantâneo)
         if (_secondsHeld >= _secondsToHold) {
           _isCorrect = true;
           _onSuccess();
@@ -444,9 +444,9 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
       }
     } else {
       if (!_isCorrect) {
-        // Tolerância de 450ms antes de zerar o progresso
-        // Evita que 1 frame com ruído ou piscar de câmera zere o usuário!
-        if (_lastMatchTime == null || now.difference(_lastMatchTime!).inMilliseconds > 450) {
+        // Tolerância de 700ms antes de zerar o progresso
+        // Evita que variações rápidas de luz ou micro-tremores zerem a contagem
+        if (_lastMatchTime == null || now.difference(_lastMatchTime!).inMilliseconds > 700) {
           _firstDetectionTime = null;
           _secondsHeld = 0;
         }
@@ -456,7 +456,7 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
     // Atualiza a tela com o que a IA está enxergando agora
     setState(() {
       _detectedConfidence = confidence;
-      if (confidence >= (_isMovement ? 0.40 : 0.45)) {
+      if (confidence >= (_isMovement ? 0.35 : 0.40)) {
         _detectedGesture = gesture;
       } else {
         _detectedGesture = "Aguardando...";
