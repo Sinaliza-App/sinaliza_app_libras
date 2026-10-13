@@ -59,7 +59,7 @@ class LibrasInferenceService {
     }
   }
 
-  /// Retorna o nome do sinal predito com base no index (Retrocompatibilidade com testes)
+  /// Retorna o nome do sinal predito com base no index
   String getSignName(int index) {
     if (index >= 0 && index < _classMapLstm.length) {
       return _classMapLstm[index];
@@ -80,35 +80,32 @@ class LibrasInferenceService {
   }
 
   /// Inferência para Palavras (Modelo LSTM)
-  /// Inferência para Palavras (Modelo LSTM)
   Future<Map<String, dynamic>> predict(List<List<double>> sequence30x258) async {
-    if (_sessionLstm == null || sequence30x258.length != 30) return {'prediction': 'Nenhum', 'confidence': 0.0};
+    if (_sessionLstm == null || sequence30x258.length != 30) {
+        return {'prediction': 'Nenhum', 'confidence': 0.0};
+    }
+    
     try {
+      // Como o vision_extract_service.dart agora organiza as mãos corretamente, 
+      // o Candidato 1 quase sempre será o vitorioso com altíssima confiança.
       final res1 = await _runLstmInternal(sequence30x258);
       final double conf1 = (res1['confidence'] as num?)?.toDouble() ?? 0.0;
 
-      // Se a confiança for menor que 0.85, testamos também o candidato com slots de mão invertidos
-      // (caso o usuário esteja usando a mão oposta ou o sinal dinâmico tenha sido treinado no outro slot)
-      if (conf1 < 0.85) {
-        final swappedSeq = sequence30x258.map((frame) {
-          final swappedFrame = List<double>.from(frame);
-          for (int i = 0; i < 63; i++) {
-            final tmp = swappedFrame[132 + i];
-            swappedFrame[132 + i] = swappedFrame[195 + i];
-            swappedFrame[195 + i] = tmp;
-          }
-          return swappedFrame;
-        }).toList();
-
-        final res2 = await _runLstmInternal(swappedSeq);
-        final double conf2 = (res2['confidence'] as num?)?.toDouble() ?? 0.0;
-
-        if (conf2 > conf1) {
-          return res2;
+      // O Candidato 2 (Invertido) funciona como excelente redundância para usuários canhotos
+      final swappedSeq = sequence30x258.map((frame) {
+        final swappedFrame = List<double>.from(frame);
+        for (int i = 0; i < 63; i++) {
+          final tmp = swappedFrame[132 + i];
+          swappedFrame[132 + i] = swappedFrame[195 + i];
+          swappedFrame[195 + i] = tmp;
         }
-      }
+        return swappedFrame;
+      }).toList();
 
-      return res1;
+      final res2 = await _runLstmInternal(swappedSeq);
+      final double conf2 = (res2['confidence'] as num?)?.toDouble() ?? 0.0;
+
+      return conf2 > conf1 ? res2 : res1;
     } catch (e) { 
       debugPrint("❌ Erro no ONNX (LSTM): $e");
       return {'prediction': 'Nenhum', 'confidence': 0.0}; 
@@ -120,6 +117,7 @@ class LibrasInferenceService {
     final inputOrt = OrtValueTensor.createTensorWithDataList(Float32List.fromList(flatList), [1, 30, 258]);
     final runOptions = OrtRunOptions();
     List<OrtValue?>? outputs;
+    
     try {
       outputs = await _sessionLstm!.runAsync(runOptions, {'input': inputOrt});
       final rawProbs = outputs?.first?.value as List<dynamic>?;
@@ -153,12 +151,8 @@ class LibrasInferenceService {
     if (isEmpty) return {'prediction': 'Nenhum', 'confidence': 0.0};
     
     try {
-      // 1. Candidato 1: Mão como veio
       final res1 = await _runMlpInternal(features258);
 
-      // 2. Candidato 2: Inversão dos slots de mão (132..194 <-> 195..257)
-      // Permite que sinais como Q (treinado no slot direito 195..257) e sinais em qualquer mão
-      // obtenham 100% de confiança
       final candidate2 = List<double>.from(features258);
       for (int i = 0; i < 63; i++) {
         final tmp = candidate2[132 + i];
@@ -181,6 +175,7 @@ class LibrasInferenceService {
     final inputOrt = OrtValueTensor.createTensorWithDataList(Float32List.fromList(feat), [1, 258]);
     final runOptions = OrtRunOptions();
     List<OrtValue?>? outputs;
+    
     try {
       outputs = await _sessionMlp!.runAsync(runOptions, {'input': inputOrt});
       final rawProbs = outputs?.first?.value as List<dynamic>?;

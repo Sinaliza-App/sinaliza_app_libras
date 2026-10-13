@@ -252,8 +252,9 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
       final payload = {
         "user_id": userId,
         "sign_name": _targetGesture,
+        "mode": _isMovement ? "dinamico" : "alfabeto",
         "source": "mobile_feedback",
-        "reporter_role": "student",
+        "reporter_role": "aluno",
         "raw_landmarks": _lastLandmarks,
       };
 
@@ -263,23 +264,11 @@ class _ChallengeSequenceScreenState extends State<ChallengeSequenceScreen> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        if (userId != null) {
-          final res = await Supabase.instance.client
-              .from('profiles')
-              .select('total_score')
-              .eq('id', userId)
-              .single();
-          final currentScore = res['total_score'] as int? ?? 0;
-          await Supabase.instance.client
-              .from('profiles')
-              .update({'total_score': currentScore + 10})
-              .eq('id', userId);
-        }
         if (mounted) {
           Provider.of<UserProvider>(context, listen: false).addScore(10);
           CustomSnackBar.showSuccess(
             context,
-            "Amostra enviada para revisão do professor! +10 XP",
+            "Amostra enviada para curadoria do professor! +10 XP 🚀",
           );
         }
       } else {
