@@ -79,19 +79,36 @@ class LibrasInferenceService {
     return exps.map((e) => e / sumExp).toList();
   }
 
+  static String normalizeSymbol(String text) {
+    String s = text.toLowerCase().trim();
+    s = s.replaceAll('c_cedilha', 'c_cedilha')
+         .replaceAll('c-cedilha', 'c_cedilha')
+         .replaceAll('c cedilha', 'c_cedilha')
+         .replaceAll('ç', 'c_cedilha');
+    s = s.replaceAll(RegExp(r'[?!.,;:()\[\]{}]'), '');
+    return s
+        .replaceAll(RegExp(r'[áàâãä]'), 'a')
+        .replaceAll(RegExp(r'[éèêë]'), 'e')
+        .replaceAll(RegExp(r'[íìîï]'), 'i')
+        .replaceAll(RegExp(r'[óòôõö]'), 'o')
+        .replaceAll(RegExp(r'[úùûü]'), 'u')
+        .replaceAll(RegExp(r'[\s/|-]+'), '_')
+        .trim();
+  }
+
   /// Inferência para Palavras (Modelo LSTM)
-  Future<Map<String, dynamic>> predict(List<List<double>> sequence30x258) async {
+  Future<Map<String, dynamic>> predict(
+    List<List<double>> sequence30x258, {
+    String? targetSign,
+  }) async {
     if (_sessionLstm == null || sequence30x258.length != 30) {
-        return {'prediction': 'Nenhum', 'confidence': 0.0};
+      return {'prediction': 'Nenhum', 'confidence': 0.0};
     }
     
     try {
-      // Como o vision_extract_service.dart agora organiza as mãos corretamente, 
-      // o Candidato 1 quase sempre será o vitorioso com altíssima confiança.
       final res1 = await _runLstmInternal(sequence30x258);
-      final double conf1 = (res1['confidence'] as num?)?.toDouble() ?? 0.0;
 
-      // O Candidato 2 (Invertido) funciona como excelente redundância para usuários canhotos
+      // O Candidato 2 (Invertido) funciona como redundância para canhotos
       final swappedSeq = sequence30x258.map((frame) {
         final swappedFrame = List<double>.from(frame);
         for (int i = 0; i < 63; i++) {
@@ -103,7 +120,27 @@ class LibrasInferenceService {
       }).toList();
 
       final res2 = await _runLstmInternal(swappedSeq);
+
+      final String pred1 = (res1['prediction'] as String?) ?? '';
+      final double conf1 = (res1['confidence'] as num?)?.toDouble() ?? 0.0;
+
+      final String pred2 = (res2['prediction'] as String?) ?? '';
       final double conf2 = (res2['confidence'] as num?)?.toDouble() ?? 0.0;
+
+      // Se há um alvo esperado (da lição atual), prioriza o candidato que valida o alvo
+      if (targetSign != null && targetSign.isNotEmpty) {
+        final normTarget = normalizeSymbol(targetSign);
+        final match1 = normalizeSymbol(pred1) == normTarget;
+        final match2 = normalizeSymbol(pred2) == normTarget;
+
+        if (match1 && match2) {
+          return conf1 >= conf2 ? res1 : res2;
+        } else if (match1 && conf1 >= 0.25) {
+          return res1;
+        } else if (match2 && conf2 >= 0.25) {
+          return res2;
+        }
+      }
 
       return conf2 > conf1 ? res2 : res1;
     } catch (e) { 
@@ -144,7 +181,10 @@ class LibrasInferenceService {
   }
 
   /// Inferência para Alfabeto (Modelo MLP)
-  Future<Map<String, dynamic>> predictAlphabet(List<double> features258) async {
+  Future<Map<String, dynamic>> predictAlphabet(
+    List<double> features258, {
+    String? targetSign,
+  }) async {
     if (_sessionMlp == null) return {'prediction': 'Nenhum', 'confidence': 0.0};
     
     final bool isEmpty = features258.every((e) => e == 0.0);
@@ -161,8 +201,26 @@ class LibrasInferenceService {
       }
       final res2 = await _runMlpInternal(candidate2);
 
+      final String pred1 = (res1['prediction'] as String?) ?? '';
       final double conf1 = (res1['confidence'] as num?)?.toDouble() ?? 0.0;
+
+      final String pred2 = (res2['prediction'] as String?) ?? '';
       final double conf2 = (res2['confidence'] as num?)?.toDouble() ?? 0.0;
+
+      // Se há um alvo esperado (da lição atual), prioriza o candidato que valida o alvo
+      if (targetSign != null && targetSign.isNotEmpty) {
+        final normTarget = normalizeSymbol(targetSign);
+        final match1 = normalizeSymbol(pred1) == normTarget;
+        final match2 = normalizeSymbol(pred2) == normTarget;
+
+        if (match1 && match2) {
+          return conf1 >= conf2 ? res1 : res2;
+        } else if (match1 && conf1 >= 0.25) {
+          return res1;
+        } else if (match2 && conf2 >= 0.25) {
+          return res2;
+        }
+      }
 
       return conf2 > conf1 ? res2 : res1;
     } catch (e) {

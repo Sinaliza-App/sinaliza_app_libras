@@ -144,11 +144,30 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   Future<void> _reportError() async {
-    if (_lastLandmarks.isEmpty || _lastLandmarks.length != 30) {
-      CustomSnackBar.showError(context, "Nenhum dado capturado ainda. Aguarde.");
+    final List<List<double>> sourceFrames = _frameBuffer.isNotEmpty 
+        ? List<List<double>>.from(_frameBuffer)
+        : List<List<double>>.from(_lastLandmarks);
+
+    if (sourceFrames.isEmpty) {
+      CustomSnackBar.showWarning(context, "Posicione sua mão na câmera antes de enviar.");
       return;
     }
+
     try {
+      // O modo alfabeto requer 20 frames no pipeline padrão; dinâmico requer 30 frames.
+      final int requiredFrames = _isMovement ? 30 : 20;
+      List<List<double>> payloadFrames = List<List<double>>.from(sourceFrames);
+
+      // Se tiver menos frames que o necessário, preenche com repetição do último frame válido
+      while (payloadFrames.length < requiredFrames) {
+        payloadFrames.add(List<double>.from(payloadFrames.last));
+      }
+
+      // Se tiver mais frames que o necessário, mantém os mais recentes
+      if (payloadFrames.length > requiredFrames) {
+        payloadFrames = payloadFrames.sublist(payloadFrames.length - requiredFrames);
+      }
+
       final userId = Supabase.instance.client.auth.currentUser?.id;
       final payload = {
         "user_id": userId,
@@ -156,21 +175,24 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         "mode": _isMovement ? "dinamico" : "alfabeto",
         "source": "mobile_feedback",
         "reporter_role": "aluno",
-        "raw_landmarks": _lastLandmarks
+        "raw_landmarks": payloadFrames,
       };
 
       final response = await ApiService.post('$apiBaseUrl/coleta/amostra', body: jsonEncode(payload));
       
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (mounted) {
-          Provider.of<UserProvider>(context, listen: false).addScore(10);
-          CustomSnackBar.showSuccess(context, "Amostra enviada para curadoria do professor! +10 XP 🚀");
+          // Não pontua XP no reporte para evitar exploração/farm de XP
+          CustomSnackBar.showSuccess(
+            context, 
+            "Sinal enviado com sucesso para revisão do professor! Obrigado pela ajuda! 🚀",
+          );
         }
       } else {
         if (mounted) CustomSnackBar.showError(context, "Erro ao enviar amostra: ${response.statusCode}");
       }
     } catch (e) {
-      if (mounted) CustomSnackBar.showError(context, "Erro de rede ao reportar incorreção.");
+      if (mounted) CustomSnackBar.showError(context, "Erro de rede ao enviar o sinal.");
     }
   }
 
@@ -230,7 +252,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         // 3. Inferência local no ONNX
         if (!_isMovement) {
           // Alfabeto (MLP): Usa apenas o frame atual
-          final result = await _inferenceService.predictAlphabet(features);
+          final result = await _inferenceService.predictAlphabet(
+            features,
+            targetSign: _targetGesture,
+          );
           debugPrint("📝 Resultado Alfabeto: $result");
           
           final String gesture = (result['prediction'] as String?) ?? "Nenhum";
@@ -240,7 +265,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         } else {
           // Gestos (LSTM): Requer o buffer completo de 30 frames
           if (_frameBuffer.length == 30) {
-            final result = await _inferenceService.predict(_frameBuffer);
+            final result = await _inferenceService.predict(
+              _frameBuffer,
+              targetSign: _targetGesture,
+            );
             debugPrint("🏃‍♂️ Resultado Movimento: $result");
             
             final String gesture = (result['prediction'] as String?) ?? "Nenhum";
@@ -793,13 +821,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                           ),
                     const SizedBox(height: 8),
                     
-                    // Botão Reportar (Compacto)
+                    // Botão Enviar para Revisão (Compacto)
                     SizedBox(
                       height: 40,
                       child: TextButton.icon(
-                        icon: const Icon(Icons.report_problem, color: AppColors.neonOrange, size: 20),
+                        icon: const Icon(Icons.help_outline, color: AppColors.neonOrange, size: 20),
                         label: const Text(
-                          "Reportar Incorreção",
+                          "Enviar Sinal para Revisão",
                           style: TextStyle(
                             color: AppColors.neonOrange,
                             fontWeight: FontWeight.bold,

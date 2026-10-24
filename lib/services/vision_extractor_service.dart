@@ -51,49 +51,41 @@ class VisionExtractorService {
     try {
       final int effectiveRotation = cameraRotation;
 
-      // CORREÇÃO 1: Mapeamento Direto para o Espaço de Treinamento (640x480)
-      // Como o MediaPipe devolve coordenadas de [0, 1], multiplicar pelas resoluções 
-      // alvo recria exatamente a geometria da webcam original do painel web.
-      const double scaleX = 640.0;
-      const double scaleY = 480.0;
-      const double scaleZ = 640.0; // Eixo Z acompanha a proporção horizontal
-
       final hands = _handLandmarker!.detect(image, effectiveRotation);
 
       if (hands.length == 1) {
         final hand = hands.first;
-        // Na tela espelhada, a mão no lado esquerdo (x < 0.5) é a mão DIREITA física.
-        final double sX = _toScreenCoords(hand.landmarks[0], cameraRotation, lensDirection, scaleX, scaleY, scaleZ).$1;
-        
-        // Se X for menor que a metade da tela (320), é a mão direita.
-        final targetList = sX <= 320.0 ? rawRightHand : rawLeftHand;
-
+        // No treinamento dos modelos de 258 features (MediaPipe Holistic espelhado),
+        // o slot principal para sinais com uma única mão é rawLeftHand (132..194).
+        // Preenchemos rawLeftHand para garantir que a predição primária utilize os pesos corretos.
         for (int i = 0; i < 21 && i < hand.landmarks.length; i++) {
-          final pt = _toScreenCoords(hand.landmarks[i], cameraRotation, lensDirection, scaleX, scaleY, scaleZ);
+          final pt = _toScreenCoords(hand.landmarks[i], cameraRotation, lensDirection);
           final int baseIdx = i * 3;
-          targetList[baseIdx]     = pt.$1;
-          targetList[baseIdx + 1] = pt.$2;
-          targetList[baseIdx + 2] = pt.$3;
+          rawLeftHand[baseIdx]     = pt.$1;
+          rawLeftHand[baseIdx + 1] = pt.$2;
+          rawLeftHand[baseIdx + 2] = pt.$3;
         }
       } else if (hands.length >= 2) {
-        final ptWrist0 = _toScreenCoords(hands[0].landmarks[0], cameraRotation, lensDirection, scaleX, scaleY, scaleZ);
-        final ptWrist1 = _toScreenCoords(hands[1].landmarks[0], cameraRotation, lensDirection, scaleX, scaleY, scaleZ);
+        final ptWrist0 = _toScreenCoords(hands[0].landmarks[0], cameraRotation, lensDirection);
+        final ptWrist1 = _toScreenCoords(hands[1].landmarks[0], cameraRotation, lensDirection);
         
         final double sX0 = ptWrist0.$1;
         final double sX1 = ptWrist1.$1;
 
-        // CORREÇÃO 2: A mão com MENOR X na tela é a mão DIREITA do usuário.
-        final handForRight = sX0 <= sX1 ? hands[0] : hands[1];
-        final handForLeft = sX0 <= sX1 ? hands[1] : hands[0];
+        // Na câmera frontal espelhada:
+        // A mão com menor X na tela (à esquerda visual) é a mão esquerda física do usuário.
+        // A mão com maior X na tela (à direita visual) é a mão direita física do usuário.
+        final handForLeft = sX0 <= sX1 ? hands[0] : hands[1];
+        final handForRight = sX0 <= sX1 ? hands[1] : hands[0];
 
         for (int i = 0; i < 21; i++) {
-          final ptLeft = _toScreenCoords(handForLeft.landmarks[i], cameraRotation, lensDirection, scaleX, scaleY, scaleZ);
+          final ptLeft = _toScreenCoords(handForLeft.landmarks[i], cameraRotation, lensDirection);
           final int baseIdxLeft = i * 3;
           rawLeftHand[baseIdxLeft]     = ptLeft.$1;
           rawLeftHand[baseIdxLeft + 1] = ptLeft.$2;
           rawLeftHand[baseIdxLeft + 2] = ptLeft.$3;
 
-          final ptRight = _toScreenCoords(handForRight.landmarks[i], cameraRotation, lensDirection, scaleX, scaleY, scaleZ);
+          final ptRight = _toScreenCoords(handForRight.landmarks[i], cameraRotation, lensDirection);
           final int baseIdxRight = i * 3;
           rawRightHand[baseIdxRight]     = ptRight.$1;
           rawRightHand[baseIdxRight + 1] = ptRight.$2;
@@ -112,10 +104,16 @@ class VisionExtractorService {
     }
 
     final List<double> finalFeatures = List.filled(258, 0.0);
-    finalFeatures.setRange(0, 132, _cachedPoseFeatures);
 
-    if (!_isPoseProcessing && _poseDetector != null) {
-      _triggerAsyncPoseDetection(image, cameraRotation, lensDirection: lensDirection);
+    // O pose só é necessário para sinais dinâmicos (LSTM).
+    // Para o alfabeto estático (MLP), deixar pose zerado garante 100% de estabilidade
+    // sem ruídos ou artefatos de estimação do corpo afetando a classificação dos dedos.
+    if (isMovement) {
+      finalFeatures.setRange(0, 132, _cachedPoseFeatures);
+
+      if (!_isPoseProcessing && _poseDetector != null) {
+        _triggerAsyncPoseDetection(image, cameraRotation, lensDirection: lensDirection);
+      }
     }
 
     _normalizeHand(rawLeftHand, finalFeatures, 132);
@@ -174,11 +172,6 @@ class VisionExtractorService {
       final poses = await _poseDetector!.processImage(inputImage);
       if (poses.isNotEmpty) {
         final pose = poses.first;
-        
-        // CORREÇÃO 3: Aplicar escala fixa 640x480 na Pose também
-        const double scaleX = 640.0;
-        const double scaleY = 480.0;
-        const double scaleZ = 640.0;
 
         final double uprightW = (cameraRotation == 90 || cameraRotation == 270) ? imageSize.height : imageSize.width;
         final double uprightH = (cameraRotation == 90 || cameraRotation == 270) ? imageSize.width : imageSize.height;
@@ -197,9 +190,10 @@ class VisionExtractorService {
             final double screenY = normY;
             final double screenZ = normZ;
 
-            rawPose[baseIdx]     = screenX * scaleX;
-            rawPose[baseIdx + 1] = screenY * scaleY;
-            rawPose[baseIdx + 2] = screenZ * scaleZ;
+            // Coordenadas isotrópicas [0, 1] idênticas ao cv_utils.py original
+            rawPose[baseIdx]     = screenX;
+            rawPose[baseIdx + 1] = screenY;
+            rawPose[baseIdx + 2] = screenZ;
             rawPose[baseIdx + 3] = landmark.likelihood;
           }
         }
@@ -264,7 +258,7 @@ class VisionExtractorService {
   }
 
   (double, double, double) _toScreenCoords(
-      dynamic mark, int cameraRotation, CameraLensDirection lensDirection, double scaleX, double scaleY, double scaleZ) {
+      dynamic mark, int cameraRotation, CameraLensDirection lensDirection) {
     final double markX = (mark.x as num).toDouble();
     final double markY = (mark.y as num).toDouble();
     final double markZ = (mark.z as num).toDouble();
@@ -312,7 +306,7 @@ class VisionExtractorService {
       }
     }
 
-    return (outX * scaleX, outY * scaleY, markZ * scaleZ);
+    return (outX, outY, markZ);
   }
 
   void dispose() {
