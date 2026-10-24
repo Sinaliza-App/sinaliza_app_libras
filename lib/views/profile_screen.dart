@@ -22,9 +22,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _teacherCodeController = TextEditingController();
 
   bool _isSaving = false;
   bool _obscurePassword = true;
+  bool _isTeacher = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _teacherCodeController.dispose();
+    super.dispose();
+  }
 
   // --- NOVA FUNÇÃO DE VALIDAÇÃO DETALHADA ---
   // Retorna null se a senha for válida, ou a mensagem de erro específica.
@@ -60,18 +71,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    // 2. Validação de Senha Específica (MUDANÇA AQUI)
+    // 2. Validação de Senha Específica
     final String? passwordError = _getPasswordError(password);
     
     if (passwordError != null) {
-      // Se houver erro, mostra a mensagem específica
       if (!mounted) return;
       CustomSnackBar.showWarning(context, passwordError);
-      return; // Para a execução aqui
+      return;
     }
     if (!_isEmailValid(email)) {
       CustomSnackBar.showError(context, 'E-mail inválido. Verifique se tem @ e .com');
-      return; // Para tudo aqui e não envia pro servidor
+      return;
+    }
+
+    final Map<String, dynamic> metadata = {'name': name};
+
+    if (_isTeacher) {
+      final code = _teacherCodeController.text.trim();
+      if (code.toUpperCase() != 'PROF-SINALIZA-2026') {
+        CustomSnackBar.showError(context, 'Código institucional de professor incorreto.');
+        return;
+      }
+      metadata['role'] = 'teacher';
+      metadata['institution_code'] = code.toUpperCase();
     }
 
     setState(() => _isSaving = true);
@@ -80,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final AuthResponse res = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
-        data: {'name': name},
+        data: metadata,
         emailRedirectTo: 'sinaliza://login',
       );
 
@@ -88,7 +110,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (res.user != null) {
         // SUCESSO
-        CustomSnackBar.showSuccess(context, "Usuário criado com sucesso! Verifique seu e-mail.");
+        final msg = _isTeacher 
+          ? "Conta de professor criada com sucesso! Acesse o painel web." 
+          : "Usuário criado com sucesso! Verifique seu e-mail.";
+        CustomSnackBar.showSuccess(context, msg);
         Navigator.pop(context); 
       }
     } on AuthException catch (e) {
@@ -297,7 +322,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 12),
+
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _isTeacher,
+                                activeColor: neonGreen,
+                                checkColor: darkBackground,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _isTeacher = val ?? false;
+                                  });
+                                },
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _isTeacher = !_isTeacher;
+                                  });
+                                },
+                                child: Text(
+                                  'Sou Professor / Educador',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (_isTeacher) ...[
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _teacherCodeController,
+                              style: const TextStyle(color: neonGreen),
+                              decoration: InputDecoration(
+                                labelText: 'Código Institucional Docente',
+                                hintText: 'PROF-SINALIZA-2026',
+                                hintStyle: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                ),
+                                labelStyle: const TextStyle(color: neonGreen),
+                                filled: true,
+                                fillColor: inputDark,
+                                prefixIcon: const Icon(
+                                  Icons.school_outlined,
+                                  color: neonGreen,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(color: neonGreen),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(
+                                    color: neonGreen.withValues(alpha: 0.5),
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                  horizontal: 16,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+
+                          const SizedBox(height: 14),
 
                           _isSaving
                               ? const CircularProgressIndicator(

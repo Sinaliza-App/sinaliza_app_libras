@@ -37,14 +37,6 @@ class VisionExtractorService {
     debugPrint("VisionExtractorService inicializado");
   }
 
-  /// Processa o frame e devolve um array de 258 posições com NORMALIZAÇÃO 3D.
-  /// Layout: [pose 33×4=132] [mão_esquerda 21×3=63] [mão_direita 21×3=63] = 258
-  /// 
-  /// Pipeline idêntico ao Web Dashboard e Python:
-  ///   - HandLandmarker roda com rotação nativa via MediaPipe Tasks.
-  ///   - Espelhamento frontal inverte apenas o eixo horizontal (1.0 - mark.x).
-  ///   - Normalização 3D pelo pulso e MCP9 com escala euclidiana natural.
-  ///   - Mãos mapeadas de forma determinística (menor X = esquerda, maior X = direita).
   Future<List<double>> processImage(
     CameraImage image, 
     int cameraRotation, {
@@ -57,60 +49,47 @@ class VisionExtractorService {
     final List<double> rawRightHand = List.filled(21 * 3, 0.0);
 
     try {
-      // Para câmeras frontais no Android, o sensorOrientation é 270°.
-      // O ângulo horário necessário para alinhar a imagem na vertical (portrait upright)
-      // para o MediaPipe Tasks é exatamente cameraRotation (270° no frontal, 90° no traseiro).
       final int effectiveRotation = cameraRotation;
 
       final hands = _handLandmarker!.detect(image, effectiveRotation);
 
-      if (hands.isNotEmpty && kDebugMode) {
-        final pt0 = _toScreenCoords(hands[0].landmarks[0], cameraRotation, lensDirection);
-        final pt9 = _toScreenCoords(hands[0].landmarks[9], cameraRotation, lensDirection);
-        debugPrint("🖐️ [HandLandmarker] Mãos: ${hands.length} | Pulso: (${pt0.$1.toStringAsFixed(2)}, ${pt0.$2.toStringAsFixed(2)}) | MCP9: (${pt9.$1.toStringAsFixed(2)}, ${pt9.$2.toStringAsFixed(2)}) | dx: ${(pt9.$1 - pt0.$1).toStringAsFixed(3)} | dy: ${(pt9.$2 - pt0.$2).toStringAsFixed(3)}");
-      }
-
       if (hands.length == 1) {
         final hand = hands.first;
-        // Se há apenas 1 mão em quadro:
-        // Colocamos sempre no slot primário (rawLeftHand: 132..194).
-        // O LibrasInferenceService (tanto MLP quanto LSTM) possui Dual Candidate
-        // que avalia automaticamente o slot normal e o slot invertido se a confiança for baixa.
-        // Isso evita que a mão "salte" de slot no meio do movimento (ex: screenX cruzando a tela).
-        final targetList = rawLeftHand;
-
-        final handMarks = hand.landmarks;
-        for (int i = 0; i < 21 && i < handMarks.length; i++) {
-          final pt = _toScreenCoords(handMarks[i], cameraRotation, lensDirection);
-          final int baseIdx = i * 3;
-          targetList[baseIdx]     = pt.$1;
-          targetList[baseIdx + 1] = pt.$2;
-          targetList[baseIdx + 2] = pt.$3;
-        }
-      } else if (hands.length >= 2) {
-        final ptWrist0 = _toScreenCoords(hands[0].landmarks[0], cameraRotation, lensDirection);
-        final ptWrist1 = _toScreenCoords(hands[1].landmarks[0], cameraRotation, lensDirection);
-        final double sX0 = ptWrist0.$1;
-        final double sX1 = ptWrist1.$1;
-
-        // Menor screenX = lado esquerdo da tela (mão física esquerda) -> rawLeftHand (132..194).
-        // Maior screenX = lado direito da tela (mão física direita) -> rawRightHand (195..257).
-        final handForLeft = sX0 <= sX1 ? hands[0] : hands[1];
-        final handForRight = sX0 <= sX1 ? hands[1] : hands[0];
-
-        for (int i = 0; i < 21 && i < handForLeft.landmarks.length; i++) {
-          final pt = _toScreenCoords(handForLeft.landmarks[i], cameraRotation, lensDirection);
+        // No treinamento dos modelos de 258 features (MediaPipe Holistic espelhado),
+        // o slot principal para sinais com uma única mão é rawLeftHand (132..194).
+        // Preenchemos rawLeftHand para garantir que a predição primária utilize os pesos corretos.
+        for (int i = 0; i < 21 && i < hand.landmarks.length; i++) {
+          final pt = _toScreenCoords(hand.landmarks[i], cameraRotation, lensDirection);
           final int baseIdx = i * 3;
           rawLeftHand[baseIdx]     = pt.$1;
           rawLeftHand[baseIdx + 1] = pt.$2;
           rawLeftHand[baseIdx + 2] = pt.$3;
         }
-        for (int i = 0; i < 21 && i < handForRight.landmarks.length; i++) {
-          final pt = _toScreenCoords(handForRight.landmarks[i], cameraRotation, lensDirection);
-          final int baseIdx = i * 3;
-          rawRightHand[baseIdx]     = pt.$1;
-          rawRightHand[baseIdx + 1] = pt.$2;
-          rawRightHand[baseIdx + 2] = pt.$3;
+      } else if (hands.length >= 2) {
+        final ptWrist0 = _toScreenCoords(hands[0].landmarks[0], cameraRotation, lensDirection);
+        final ptWrist1 = _toScreenCoords(hands[1].landmarks[0], cameraRotation, lensDirection);
+        
+        final double sX0 = ptWrist0.$1;
+        final double sX1 = ptWrist1.$1;
+
+        // Na câmera frontal espelhada:
+        // A mão com menor X na tela (à esquerda visual) é a mão esquerda física do usuário.
+        // A mão com maior X na tela (à direita visual) é a mão direita física do usuário.
+        final handForLeft = sX0 <= sX1 ? hands[0] : hands[1];
+        final handForRight = sX0 <= sX1 ? hands[1] : hands[0];
+
+        for (int i = 0; i < 21; i++) {
+          final ptLeft = _toScreenCoords(handForLeft.landmarks[i], cameraRotation, lensDirection);
+          final int baseIdxLeft = i * 3;
+          rawLeftHand[baseIdxLeft]     = ptLeft.$1;
+          rawLeftHand[baseIdxLeft + 1] = ptLeft.$2;
+          rawLeftHand[baseIdxLeft + 2] = ptLeft.$3;
+
+          final ptRight = _toScreenCoords(handForRight.landmarks[i], cameraRotation, lensDirection);
+          final int baseIdxRight = i * 3;
+          rawRightHand[baseIdxRight]     = ptRight.$1;
+          rawRightHand[baseIdxRight + 1] = ptRight.$2;
+          rawRightHand[baseIdxRight + 2] = ptRight.$3;
         }
       }
     } catch (e) {
@@ -118,30 +97,26 @@ class VisionExtractorService {
       return List.filled(258, 0.0);
     }
 
-    // --- 3. NOISE GATE ---
     final bool hasLeft = rawLeftHand.any((v) => v != 0.0);
     final bool hasRight = rawRightHand.any((v) => v != 0.0);
     if (!hasLeft && !hasRight) {
       return List.filled(258, 0.0);
     }
 
-    // --- 4. VETOR FINAL COM NORMALIZAÇÃO GEOMÉTRICA ---
     final List<double> finalFeatures = List.filled(258, 0.0);
 
-    // Para movimento dinâmico (LSTM), utiliza pose cacheada sem travar o stream a 10 FPS
+    // O pose só é necessário para sinais dinâmicos (LSTM).
+    // Para o alfabeto estático (MLP), deixar pose zerado garante 100% de estabilidade
+    // sem ruídos ou artefatos de estimação do corpo afetando a classificação dos dedos.
     if (isMovement) {
       finalFeatures.setRange(0, 132, _cachedPoseFeatures);
 
-      // Dispara detecção assíncrona se o detector de pose estiver ocioso
       if (!_isPoseProcessing && _poseDetector != null) {
         _triggerAsyncPoseDetection(image, cameraRotation, lensDirection: lensDirection);
       }
     }
 
-    // 4b. Normalizar Mão Esquerda (slot 132..194)
     _normalizeHand(rawLeftHand, finalFeatures, 132);
-
-    // 4c. Normalizar Mão Direita (slot 195..257)
     _normalizeHand(rawRightHand, finalFeatures, 195);
 
     return finalFeatures;
@@ -197,6 +172,7 @@ class VisionExtractorService {
       final poses = await _poseDetector!.processImage(inputImage);
       if (poses.isNotEmpty) {
         final pose = poses.first;
+
         final double uprightW = (cameraRotation == 90 || cameraRotation == 270) ? imageSize.height : imageSize.width;
         final double uprightH = (cameraRotation == 90 || cameraRotation == 270) ? imageSize.width : imageSize.height;
 
@@ -210,9 +186,14 @@ class VisionExtractorService {
             final double normY = landmark.y / uprightH;
             final double normZ = landmark.z / uprightW;
 
-            rawPose[baseIdx]     = lensDirection == CameraLensDirection.front ? (1.0 - normX) : normX;
-            rawPose[baseIdx + 1] = normY;
-            rawPose[baseIdx + 2] = normZ;
+            final double screenX = lensDirection == CameraLensDirection.front ? (1.0 - normX) : normX;
+            final double screenY = normY;
+            final double screenZ = normZ;
+
+            // Coordenadas isotrópicas [0, 1] idênticas ao cv_utils.py original
+            rawPose[baseIdx]     = screenX;
+            rawPose[baseIdx + 1] = screenY;
+            rawPose[baseIdx + 2] = screenZ;
             rawPose[baseIdx + 3] = landmark.likelihood;
           }
         }
@@ -242,14 +223,12 @@ class VisionExtractorService {
     }
   }
 
-  /// Normaliza uma mão de 21 landmarks × 3 e escreve em finalFeatures a partir de offset.
   void _normalizeHand(List<double> rawHand, List<double> finalFeatures, int offset) {
     final bool hasData = rawHand[0] != 0.0 || rawHand[1] != 0.0;
     if (!hasData) return;
 
     final double wristX = rawHand[0], wristY = rawHand[1], wristZ = rawHand[2];
 
-    // MCP do dedo médio (índice 9) — APÓS subtrair o pulso
     final double mcpX = rawHand[9 * 3] - wristX;
     final double mcpY = rawHand[9 * 3 + 1] - wristY;
     final double mcpZ = rawHand[9 * 3 + 2] - wristZ;
@@ -263,11 +242,7 @@ class VisionExtractorService {
       final double normY = (rawHand[baseIdx + 1] - wristY) / handSize;
       final double normZ = (rawHand[baseIdx + 2] - wristZ) / handSize;
 
-      // Noise Gate para Tearing de Câmera: Um dedo real não pode estar 10x mais longe que a distância Pulso-MCP.
-      // Isso impede que anomalias na imagem gerem falsos positivos
       if (normX.abs() > 10.0 || normY.abs() > 10.0 || normZ.abs() > 10.0) {
-        // Se a mão for gigante em relação ao pulso, a leitura foi corrompida.
-        // Zera tudo o que já foi preenchido para não enviar lixo para a rede.
         for(int j = 0; j < 21; j++) {
             finalFeatures[offset + (j * 3)] = 0.0;
             finalFeatures[offset + (j * 3) + 1] = 0.0;
@@ -282,16 +257,6 @@ class VisionExtractorService {
     }
   }
 
-  /// Converte as coordenadas do HandLandmarker para o sistema de tela do app.
-  /// No Android, o sensor da câmera opera em modo paisagem nativo (com sensorOrientation = 270° na frontal e 90° na traseira).
-  /// O MediaPipe Tasks retorna os landmarks mapeados de volta ao buffer de entrada cru (sensor space).
-  /// Para alinhar perfeitamente com a orientação vertical (retrato selfie espelhado), a transformação é:
-  /// Frontal (270°):
-  ///   outX = 1.0 - markY (eixo horizontal da tela espelhado)
-  ///   outY = 1.0 - markX (eixo vertical da tela)
-  /// Traseira (90°):
-  ///   outX = 1.0 - markY
-  ///   outY = markX
   (double, double, double) _toScreenCoords(
       dynamic mark, int cameraRotation, CameraLensDirection lensDirection) {
     final double markX = (mark.x as num).toDouble();
@@ -317,7 +282,7 @@ class VisionExtractorService {
           outX = 1.0 - markX;
           outY = markY;
           break;
-        default: // 0
+        default:
           outX = markX;
           outY = 1.0 - markY;
       }
@@ -335,7 +300,7 @@ class VisionExtractorService {
           outX = 1.0 - markX;
           outY = 1.0 - markY;
           break;
-        default: // 0
+        default:
           outX = markX;
           outY = markY;
       }
