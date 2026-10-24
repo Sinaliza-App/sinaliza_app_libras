@@ -45,6 +45,9 @@ class _MainTabScreenState extends State<MainTabScreen> {
     setState(() {
       _currentIndex = index;
     });
+    if (index == 3) {
+      RankingScreen.refresh();
+    }
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 300),
@@ -61,6 +64,9 @@ class _MainTabScreenState extends State<MainTabScreen> {
           setState(() {
             _currentIndex = index;
           });
+          if (index == 3) {
+            RankingScreen.refresh();
+          }
         },
         physics: const BouncingScrollPhysics(),
         children: _screens,
