@@ -60,6 +60,7 @@ class UserProvider with ChangeNotifier {
         totalScore: _user!.totalScore + points,
         profilePicture: _user!.profilePicture,
         streakCount: _user!.streakCount,
+        isAdmin: _user!.isAdmin,
       );
       notifyListeners();
     }
@@ -74,6 +75,7 @@ class UserProvider with ChangeNotifier {
         totalScore: _user!.totalScore,
         profilePicture: _user!.profilePicture,
         streakCount: streakCount,
+        isAdmin: _user!.isAdmin,
       );
       notifyListeners();
     }

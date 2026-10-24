@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:sinaliza_app_libras/services/api_service.dart';
 import 'dart:convert';
 import 'package:sinaliza_app_libras/constants.dart';
 import 'package:sinaliza_app_libras/theme/app_colors.dart';
 import 'package:sinaliza_app_libras/widgets/empty_state_widget.dart';
-
-// Removido controle global obsoleto
+import 'package:sinaliza_app_libras/providers/user_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RankingScreen extends StatefulWidget {
   const RankingScreen({super.key});
+
+  /// Notificador global para forçar atualização do ranking de qualquer lugar (troca de aba, lição finalizada, etc.)
+  static final ValueNotifier<int> refreshNotifier = ValueNotifier<int>(0);
+
+  static void refresh() {
+    refreshNotifier.value++;
+  }
 
   @override
   State<RankingScreen> createState() => _RankingScreenState();
@@ -20,6 +29,8 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
 
   List<dynamic> _ranking = [];
   bool _isLoading = true;
+  int? _lastObservedScore;
+  RealtimeChannel? _realtimeChannel;
 
   late AnimationController _entranceController;
   late Animation<double> _podium3Animation;
@@ -28,7 +39,6 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-
 
   @override
   void initState() {
@@ -42,14 +52,65 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
     _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
     _pulseAnimation = Tween<double>(begin: 0.6, end: 1.2).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
 
-    // Roda a animação toda vez que a tela for aberta
+    // Roda a animação na primeira vez que a tela for aberta
     _entranceController.forward(from: 0.0);
+
+    // Escuta notificações globais de atualização (ex: ao trocar para a aba de Ranking)
+    RankingScreen.refreshNotifier.addListener(_onExternalRefresh);
+
+    // Conecta ao Supabase Realtime para escutar alterações ao vivo na pontuação dos usuários
+    _setupRealtimeSubscription();
 
     _fetchRanking();
   }
 
+  void _onExternalRefresh() {
+    if (mounted) {
+      _fetchRanking(showLoading: false);
+    }
+  }
+
+  void _setupRealtimeSubscription() {
+    try {
+      _realtimeChannel = Supabase.instance.client
+          .channel('public:users:ranking')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'users',
+            callback: (payload) {
+              debugPrint("Evento Realtime recebido em users: atualizando ranking.");
+              if (mounted) {
+                _fetchRanking(showLoading: false);
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint("Aviso ao assinar realtime de ranking: $e");
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Detecta automaticamente quando o usuário logado ganha XP no app
+    final userProvider = Provider.of<UserProvider>(context);
+    final currentScore = userProvider.user?.totalScore;
+    if (_lastObservedScore != null && currentScore != null && currentScore != _lastObservedScore) {
+      _lastObservedScore = currentScore;
+      _fetchRanking(showLoading: false);
+    } else {
+      _lastObservedScore = currentScore;
+    }
+  }
+
   @override
   void dispose() {
+    RankingScreen.refreshNotifier.removeListener(_onExternalRefresh);
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
     _entranceController.dispose();
     _pulseController.dispose();
     super.dispose();
@@ -92,30 +153,33 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
     return Icons.shield;
   }
 
-  Future<void> _fetchRanking() async {
-    // Ajuste o IP conforme necessário
+  Future<void> _fetchRanking({bool showLoading = true}) async {
     final url = '$apiBaseUrl/ranking'; 
 
     try {
+      if (showLoading && _ranking.isEmpty) {
+        setState(() => _isLoading = true);
+      }
+
       final response = await ApiService.get(url);
 
       if (response.statusCode == 200) {
         if (mounted) {
-          setState(() {
-            _ranking = json.decode(response.body) as List<dynamic>;
-            // Pré-decodifica as imagens aqui para não travar a UI a cada frame
-            for (var user in _ranking) {
-              if (user is Map) {
-                user['decoded_image'] = _safeDecodeBase64(user['profile_picture']?.toString());
-              }
+          final decoded = json.decode(response.body) as List<dynamic>;
+          for (var user in decoded) {
+            if (user is Map) {
+              user['decoded_image'] = _safeDecodeBase64(user['profile_picture']?.toString());
             }
+          }
+          setState(() {
+            _ranking = decoded;
             _isLoading = false;
           });
         }
       }
     } catch (e) {
       debugPrint("Erro ranking: $e");
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && _ranking.isEmpty) setState(() => _isLoading = false);
     }
   }
 
@@ -137,6 +201,16 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
           style: TextStyle(color: AppColors.neonGreen, fontWeight: FontWeight.bold, letterSpacing: 2),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.neonGreen),
+            tooltip: 'Atualizar ranking',
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _fetchRanking(showLoading: false);
+            },
+          ),
+        ],
       ),
       body: Container(
         width: double.infinity,
@@ -151,11 +225,22 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppColors.neonGreen))
             : _ranking.isEmpty
-                ? const EmptyStateWidget(
-                    icon: Icons.emoji_events_rounded,
-                    title: 'O pódio está vazio!',
-                    subtitle: 'Seja o primeiro a pontuar completando lições e desafios.',
-                    color: AppColors.neonGold,
+                ? RefreshIndicator(
+                    color: AppColors.neonGreen,
+                    backgroundColor: AppColors.cardDark,
+                    onRefresh: () => _fetchRanking(showLoading: false),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                      children: [
+                        SizedBox(height: screenHeight * 0.25),
+                        const EmptyStateWidget(
+                          icon: Icons.emoji_events_rounded,
+                          title: 'O pódio está vazio!',
+                          subtitle: 'Puxe para baixo para atualizar ou pontue completando lições e desafios.',
+                          color: AppColors.neonGold,
+                        ),
+                      ],
+                    ),
                   )
                 : Column(
                     children: [
@@ -214,10 +299,28 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                               topRight: Radius.circular(30),
                             ),
                           ),
-                          child: ListView.builder(
-                            padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 40),
-                            itemCount: _ranking.length > 3 ? _ranking.length - 3 : 0,
-                            itemBuilder: (context, index) {
+                          child: RefreshIndicator(
+                            color: AppColors.neonGreen,
+                            backgroundColor: AppColors.cardDark,
+                            onRefresh: () => _fetchRanking(showLoading: false),
+                            child: _ranking.length <= 3
+                                ? ListView(
+                                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+                                    children: const [
+                                      Center(
+                                        child: Text(
+                                          "Pontue para desafiar o top 3!",
+                                          style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : ListView.builder(
+                                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                                    padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 40),
+                                    itemCount: _ranking.length - 3,
+                                    itemBuilder: (context, index) {
                               final user = _ranking[index + 3];
                               final position = index + 4;
                               
@@ -340,6 +443,7 @@ class _RankingScreenState extends State<RankingScreen> with TickerProviderStateM
                           ),
                         ),
                       ),
+                    ),
                     ],
                   ),
       ),
