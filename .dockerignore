@@ -1,0 +1,10 @@
+.dart_tool/
+.gradle/
+.idea/
+build/
+android/.gradle
+ios/.symlinks
+ios/Pods
+.git
+.gitignore
+*.apk
