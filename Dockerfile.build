@@ -1,0 +1,19 @@
+# =========================================================================
+# Dockerfile.build: Compilação de APK do Sinaliza sem instalar Flutter/Android
+# =========================================================================
+# Usa uma imagem oficial com Flutter, Dart, Java e Android SDK pré-instalados
+FROM ghcr.io/cirruslabs/flutter:stable
+
+WORKDIR /app
+
+# Copia configurações e dependências do pubspec
+COPY pubspec.yaml pubspec.lock* ./
+
+# Baixa todas as dependências do Flutter
+RUN flutter pub get
+
+# Copia o código-fonte do app
+COPY . .
+
+# Comando padrão: Compila o APK de Release otimizado por ABI
+CMD ["flutter", "build", "apk", "--release", "--split-per-abi"]
